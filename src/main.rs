@@ -1,23 +1,31 @@
-use std::fs;
 use actix_web::{get, web::{self, route, ServiceConfig}, HttpResponse, Responder};
 use contexts::connection::{create_pool, DbPool};
 use handlebars::Handlebars;
-use handlers::generic_handler::generic_scope;
+use handlers::{auth_handler::auth_scope, generic_handler::generic_scope};
 use serde_json::{json, Value};
 use services::generic_service::GenericService;
+use reqwest::Client;
 use shuttle_actix_web::ShuttleActixWeb;
 
 mod contexts {
     pub mod connection;
     pub mod model;
+    pub mod crypto;
+    pub mod jwt_session;
 }
 
 mod services {
     pub mod generic_service;
+    pub mod auth_service;
 }
 
 mod handlers {
     pub mod generic_handler;
+    pub mod auth_handler;
+}
+
+mod utils {
+    pub mod validation;
 }
 
 #[get("/")]
@@ -31,16 +39,33 @@ async fn health_check() -> impl Responder {
 
 #[get("/docs")]
 pub async fn docs(hb: web::Data<Handlebars<'_>>) -> impl Responder {
-    // 1. Baca file JSON yang berisi dokumentasi API
-    fs::copy("./templates/docs.json", "./target/docs.json").expect("Failed to copy docs.json");
-    let json_content = fs::read_to_string("./templates/docs.json")
-        .expect("Failed to read docs.json");
+    // 1. URL raw GitHub untuk docs.json
+    let url = "https://raw.githubusercontent.com/Snakesystem/snakesystem-web-api/refs/heads/main/templates/docs.json";
 
-    // 2. Parse ke Value
-    let mut data: Value = serde_json::from_str(&json_content)
-        .expect("Invalid JSON format");
+    // 2. Membuat client HTTP untuk melakukan request
+    let client = Client::new();
 
-    // 3. Pastikan request dan response di-serialize dengan benar
+    // 3. Mengunduh file JSON dari GitHub
+    let response = client.get(url)
+        .send()
+        .await
+        .map_err(|err| {
+            eprintln!("Failed to fetch file: {}", err);
+            HttpResponse::InternalServerError().body("Failed to fetch docs.json")
+        }).unwrap();
+
+    if !response.status().is_success() {
+        return HttpResponse::InternalServerError().body("Failed to fetch docs.json");
+    }
+
+    // 4. Mengambil konten JSON dari response
+    let json_content: Value = response.json().await.map_err(|err| {
+        eprintln!("Failed to parse JSON: {}", err);
+        HttpResponse::InternalServerError().body("Failed to parse docs.json")
+    }).unwrap();
+
+    // 5. Pastikan request dan response di-serialize dengan benar
+    let mut data = json_content.clone();
     if let Some(endpoints) = data.get_mut("endpoints") {
         for endpoint in endpoints.as_array_mut().unwrap() {
             if let Some(request) = endpoint.get_mut("request") {
@@ -52,10 +77,10 @@ pub async fn docs(hb: web::Data<Handlebars<'_>>) -> impl Responder {
         }
     }
 
-    // 4. Render menggunakan Handlebars
+    // 6. Render menggunakan Handlebars
     let body = hb.render("docs", &data).unwrap();
 
-    // 5. Return HTML sebagai response
+    // 7. Return HTML sebagai response
     HttpResponse::Ok().content_type("text/html").body(body)
 }
 
@@ -79,7 +104,11 @@ async fn main() -> ShuttleActixWeb<impl FnOnce(&mut ServiceConfig) + Send + Clon
         cfg
         .service(health_check)
         .service(docs)
-        .service(web::scope("/api/v1").service(generic_scope()))
+        .service(
+            web::scope("/api/v1")
+            .service(generic_scope())
+            .service(auth_scope())
+        )
         .app_data(web::Data::new(db_pool.clone()))
         .app_data(handlebars_ref.clone())
         .app_data(web::JsonConfig::default().error_handler(GenericService::json_error_handler))

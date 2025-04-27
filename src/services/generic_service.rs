@@ -3,6 +3,7 @@ use bb8::Pool;
 use bb8_tiberius::ConnectionManager;
 use serde_json::json;
 use tiberius::QueryStream;
+use rand::{rng, Rng};
 
 use crate::contexts::model::{ActionResult, Company};
 
@@ -75,5 +76,29 @@ impl GenericService {
                 "error": format!("Url '{}' not found. Please check the URL.", req.path())
             })
         })
+    }
+
+    pub fn random_string(length: usize) -> String {
+        const CHARS: &[u8] = b"ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789";
+        let mut rng = rng();
+    
+        (0..length)
+            .map(|_| {
+                let idx = rng.gen_range(0..CHARS.len());
+                CHARS[idx] as char
+            })
+            .collect()
+    }
+
+    pub fn get_ip_address(req: &HttpRequest) -> String {
+        req.headers()
+            .get("X-Forwarded-For") // Jika pakai reverse proxy seperti Nginx
+            .and_then(|ip| ip.to_str().ok())
+            .map_or_else(
+                || req.peer_addr()
+                    .map(|addr| addr.ip().to_string())
+                    .unwrap_or_else(|| "Unknown IP".to_string()),
+                |ip| ip.to_string(),
+            )
     }
 }
