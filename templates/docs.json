@@ -1,0 +1,42 @@
+{
+  "version": "1.0.0",
+  "description": "This is the API documentation for the Generic API.",
+  "endpoints": [
+    {
+      "name": "Welcome To Snakesystem Web API",
+      "method": "GET",
+      "url": "/",
+      "request": "No request body",
+      "response": {
+        "message": "Welcome to the snakesystem app!"
+      }
+    },
+    {
+      "name": "Get Company Data",
+      "method": "GET",
+      "url": "/api/v1/generic/company",
+      "request": "No request body",
+      "response": {
+        "result": true,
+        "message": "Company name",
+        "data": {
+          "company_id": "SS",
+          "company_name": "Snake System Tech"
+        }
+      }
+    },
+    {
+      "name": "Create New User",
+      "method": "POST",
+      "url": "/api/v1/user/create",
+      "request": {
+        "fullName": "Jane Smith",
+        "email": "jane.smith@example.com"
+      },
+      "response": {
+        "status": "success",
+        "message": "User created successfully."
+      }
+    }
+  ]
+}

@@ -1,0 +1,221 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Documentation | Snakesystem Web API</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            background-color: #2D2D2D;
+            color: #fff;
+            margin: 0;
+            padding: 0;
+        }
+        .container {
+            margin: 20px;
+        }
+        h1 {
+            text-align: center;
+            color: #4CAF50;
+        }
+        .description {
+            text-align: center;
+        }
+        .endpoint {
+            margin-bottom: 30px;
+        }
+        .endpoint h2 {
+            color: #ff9800;
+        }
+        .endpoint .url {
+            color: rgb(255, 98, 0);
+        }
+        .endpoint pre {
+            background-color: #1e1e1e;
+            color: #f8f8f8;
+            padding: 10px;
+            border-radius: 5px;
+            white-space: pre-wrap;
+            word-wrap: break-word;
+            display: block;
+        }
+        .endpoint .request, .endpoint .response {
+            margin-bottom: 15px;
+        }
+        .endpoint .request pre, .endpoint .response pre, .response-box pre {
+            background-color: #1e1e1e;
+            color: #f8f8f8;
+            padding: 10px;
+            border-radius: 5px;
+            white-space: pre-wrap;
+            word-wrap: break-word;
+        }
+        .button {
+            background-color: #007bff;
+            color: white;
+            padding: 10px 20px;
+            border-radius: 5px;
+            text-decoration: none;
+            cursor: pointer;
+        }
+        .response-box {
+            margin-top: 20px;
+            background-color: #333;
+            padding: 10px;
+            border-radius: 5px;
+            display: none; /* Hide by default */
+        }
+        .response-box pre {
+            color: #dcdcdc;
+        }
+        .response-url {
+            font-weight: bold;
+            color: #ff9800;
+            margin-bottom: 10px;
+        }
+        .json-key {
+            color: #ff9800; /* Warna untuk kunci (key) JSON */
+        }
+
+        .json-value {
+            color: #dcdcdc; /* Warna untuk nilai (value) JSON */
+        }
+
+        .json-object {
+            margin-left: 20px;
+            padding-left: 10px;
+            border-left: 2px solid #444;
+        }
+
+        /* Style untuk link */
+        .response-url a {
+            color: #1E90FF; /* Warna biru */
+            text-decoration: none;
+            cursor: pointer;
+            font-size: 14px;
+        }
+
+        .response-url a:hover {
+            text-decoration: underline;
+        }
+    </style>
+
+    <!-- Tambahkan CDN untuk Handlebars.js -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/handlebars.js/4.7.7/handlebars.min.js"></script>
+</head>
+<body>
+    <div class="container">
+        <h1>Snakesystem Web API Documentation V: {{version}}</h1>
+        <p class="description">{{description}}</p>
+
+        {{#each endpoints}}
+        <div class="endpoint">
+            <h2>{{name}}</h2>
+            <p><strong>Method:</strong> {{method}} | <strong>URL:</strong> <span class="url">{{url}}</span></p>
+
+            <div class="request">
+                <h3>Request</h3>
+                <pre>{{request}}</pre>
+            </div>
+
+            <div class="response">
+                <h3>Response</h3>
+                <pre>{{response}}</pre>
+            </div>
+
+            <!-- Tombol untuk mencoba API -->
+            <a class="button" onclick="tryItOut('{{url}}', '{{method}}', '{{name}}')">Try it out</a>
+        </div>
+        {{/each}}
+    </div>
+
+    <script>
+        // Fungsi untuk mengubah nama menjadi format yang aman untuk ID HTML
+        function slugify(text) {
+            return text.toLowerCase()
+                .replace(/[^a-z0-9]+/g, '-')  // Replace non-alphanumeric characters with a hyphen
+                .replace(/^[-]+|[-]+$/g, ''); // Remove leading and trailing hyphens
+        }
+
+        // Fungsi untuk memformat JSON dengan highlight key dan value
+        function formatJSONWithHighlight(json) {
+            let jsonStr = JSON.stringify(json, null, 2);
+            return jsonStr.replace(/"([^"]+)":/g, '"<span class="json-key">$1</span>":') // Highlight key
+                          .replace(/: "([^"]+)"/g, ': "<span class="json-value">$1</span>"'); // Highlight value
+        }
+
+        async function tryItOut(url, method, name) {
+            // Cari elemen endpoint yang sesuai berdasarkan 'name'
+            const endpointElements = document.querySelectorAll('.endpoint h2');
+            let endpointElement = null;
+
+            // Mencari elemen h2 yang memiliki teks yang cocok dengan 'name'
+            endpointElements.forEach(h2 => {
+                if (h2.textContent.trim() === name) {
+                    endpointElement = h2.parentElement;
+                }
+            });
+
+            // Jika elemen ditemukan, cari dan hapus elemen response-box sebelumnya
+            if (endpointElement) {
+                // Cari dan hapus elemen response-box yang ada
+                const existingResponseBox = endpointElement.querySelector('.response-box');
+                if (existingResponseBox) {
+                    existingResponseBox.remove();
+                }
+
+                // Membuat elemen baru untuk menampilkan response
+                const responseBox = document.createElement('div');
+                responseBox.className = 'response-box';
+                
+                // Menampilkan URL response sebagai link
+                const responseUrl = document.createElement('div');
+                responseUrl.className = 'response-url';
+
+                const responseContent = document.createElement('pre');
+                responseBox.appendChild(responseContent);
+
+                // Menambahkan response box ke dalam endpoint
+                endpointElement.appendChild(responseBox);
+                responseBox.style.display = 'block';
+
+                try {
+                    // Mengatur opsi fetch berdasarkan metode yang dipilih
+                    const options = {
+                        method: method,
+                        headers: {
+                            'Content-Type': 'application/json'
+                        }
+                    };
+
+                    // Jika metode POST atau PUT, tambahkan body request
+                    if (method === 'POST' || method === 'PUT') {
+                        options.body = JSON.stringify({});  // Ganti dengan data yang relevan
+                    }
+
+                    // Melakukan request menggunakan fetch
+                    const response = await fetch(url, options);
+                    const data = await response.json();
+
+                    // Membuat elemen link untuk URL
+                    const link = document.createElement('a');
+                    link.href = url;  // Ambil URL dari response.url
+                    link.target = '_blank';
+                    link.textContent = `Fetch url: ${response.url}`;  // Menampilkan url
+                    responseUrl.appendChild(link);
+
+                    responseBox.appendChild(responseUrl);
+
+                    // Menampilkan response di dalam box dengan format yang rapi dan highlight
+                    responseContent.innerHTML = formatJSONWithHighlight(data);
+                } catch (error) {
+                    responseContent.textContent = 'Error: ' + error.message;
+                }
+            } else {
+                console.error('Endpoint element not found');
+            }
+        }
+    </script>
+</body>
+</html>
