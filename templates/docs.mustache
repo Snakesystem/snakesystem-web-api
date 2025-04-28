@@ -46,11 +46,16 @@
         .endpoint .request pre, .endpoint .response pre, .response-box pre {
             background-color: #1e1e1e;
             color: #f8f8f8;
-            padding: 10px;
             border-radius: 5px;
             white-space: pre-wrap;
             word-wrap: break-word;
+            padding: 15px;
+            border-radius: 5px;
+            font-family: 'Courier New', Courier, monospace;
+            overflow: auto; /* Menambahkan scroll jika data JSON panjang */
+            font-size: 12px;
         }
+        
         .button {
             background-color: #007bff;
             color: white;
@@ -131,57 +136,77 @@
     </div>
 
     <script>
-        // Fungsi untuk mengubah nama menjadi format yang aman untuk ID HTML
-        function slugify(text) {
-            return text.toLowerCase()
-                .replace(/[^a-z0-9]+/g, '-')  // Replace non-alphanumeric characters with a hyphen
-                .replace(/^[-]+|[-]+$/g, ''); // Remove leading and trailing hyphens
+
+        document.addEventListener('DOMContentLoaded', function () {
+        const requestPre = document.querySelector('.request pre');
+        const responsePre = document.querySelector('.response pre');
+
+        function formatJson(jsonText) {
+            try {
+                const jsonObj = JSON.parse(jsonText);
+                return JSON.stringify(jsonObj, null, 2); // Format rapi
+            } catch (e) {
+                return jsonText; // Kalau error, biarin aja
+            }
         }
 
-        // Fungsi untuk memformat JSON dengan highlight key dan value
+        // Format JSON di 'request' dan 'response'
+        if (requestPre) requestPre.textContent = formatJson(requestPre.textContent);
+        if (responsePre) responsePre.textContent = formatJson(responsePre.textContent);
+    });
+        
+        function slugify(text) {
+            return text.toLowerCase()
+                .replace(/[^a-z0-9]+/g, '-')  
+                .replace(/^[-]+|[-]+$/g, ''); 
+        }
+
         function formatJSONWithHighlight(json) {
             let jsonStr = JSON.stringify(json, null, 2);
-            return jsonStr.replace(/"([^"]+)":/g, '"<span class="json-key">$1</span>":') // Highlight key
-                          .replace(/: "([^"]+)"/g, ': "<span class="json-value">$1</span>"'); // Highlight value
+            return jsonStr
+                .replace(/"([^"]+)":/g, '"<span class="json-key">$1</span>":')
+                .replace(/: "([^"]+)"/g, ': "<span class="json-value">$1</span>"');
         }
 
         async function tryItOut(url, method, name) {
-            // Cari elemen endpoint yang sesuai berdasarkan 'name'
             const endpointElements = document.querySelectorAll('.endpoint h2');
             let endpointElement = null;
 
-            // Mencari elemen h2 yang memiliki teks yang cocok dengan 'name'
             endpointElements.forEach(h2 => {
                 if (h2.textContent.trim() === name) {
                     endpointElement = h2.parentElement;
                 }
             });
 
-            // Jika elemen ditemukan, cari dan hapus elemen response-box sebelumnya
             if (endpointElement) {
-                // Cari dan hapus elemen response-box yang ada
-                const existingResponseBox = endpointElement.querySelector('.response-box');
-                if (existingResponseBox) {
-                    existingResponseBox.remove();
+                // Cek kalau sudah ada response-box, jangan dihapus, cukup update.
+                let responseBox = endpointElement.querySelector('.response-box');
+                let responseUrl, responseContent;
+
+                if (!responseBox) {
+                    // Kalau belum ada, buat baru
+                    responseBox = document.createElement('div');
+                    responseBox.className = 'response-box';
+
+                    responseUrl = document.createElement('div');
+                    responseUrl.className = 'response-url';
+                    responseBox.appendChild(responseUrl);
+
+                    responseContent = document.createElement('pre');
+                    responseBox.appendChild(responseContent);
+
+                    endpointElement.appendChild(responseBox);
+                } else {
+                    // Kalau sudah ada, ambil elemen yang sudah ada
+                    responseUrl = responseBox.querySelector('.response-url');
+                    responseContent = responseBox.querySelector('pre');
+                    responseUrl.innerHTML = '';
+                    responseContent.innerHTML = '';
                 }
 
-                // Membuat elemen baru untuk menampilkan response
-                const responseBox = document.createElement('div');
-                responseBox.className = 'response-box';
-                
-                // Menampilkan URL response sebagai link
-                const responseUrl = document.createElement('div');
-                responseUrl.className = 'response-url';
-
-                const responseContent = document.createElement('pre');
-                responseBox.appendChild(responseContent);
-
-                // Menambahkan response box ke dalam endpoint
-                endpointElement.appendChild(responseBox);
                 responseBox.style.display = 'block';
 
                 try {
-                    // Mengatur opsi fetch berdasarkan metode yang dipilih
                     const options = {
                         method: method,
                         headers: {
@@ -189,25 +214,21 @@
                         }
                     };
 
-                    // Jika metode POST atau PUT, tambahkan body request
                     if (method === 'POST' || method === 'PUT') {
-                        options.body = JSON.stringify({});  // Ganti dengan data yang relevan
+                        options.body = JSON.stringify({});  
                     }
 
-                    // Melakukan request menggunakan fetch
                     const response = await fetch(url, options);
                     const data = await response.json();
 
-                    // Membuat elemen link untuk URL
+                    // Buat link URL
                     const link = document.createElement('a');
-                    link.href = url;  // Ambil URL dari response.url
+                    link.href = url;
                     link.target = '_blank';
-                    link.textContent = `Fetch url: ${response.url}`;  // Menampilkan url
+                    link.textContent = `Fetch url: ${response.url}`;
                     responseUrl.appendChild(link);
 
-                    responseBox.appendChild(responseUrl);
-
-                    // Menampilkan response di dalam box dengan format yang rapi dan highlight
+                    // Tampilkan isi response dengan highlight
                     responseContent.innerHTML = formatJSONWithHighlight(data);
                 } catch (error) {
                     responseContent.textContent = 'Error: ' + error.message;
@@ -217,5 +238,6 @@
             }
         }
     </script>
+
 </body>
 </html>
