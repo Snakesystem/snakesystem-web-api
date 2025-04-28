@@ -26,17 +26,29 @@
       }
     },
     {
-      "name": "Create New User",
+      "name": "Login",
       "method": "POST",
-      "url": "/api/v1/user/create",
+      "url": "/api/v1/auth/login",
       "request": {
-        "fullName": "Jane Smith",
-        "email": "jane.smith@example.com"
+        "email": "example@gmail.com",
+        "password": "54321"
       },
       "response": {
-        "status": "success",
-        "message": "User created successfully."
-      }
+        "result": true,
+        "message": "Welcome example@gmail.com",
+        "data": {
+            "result": true,
+            "auth_usernid": 1,
+            "email": "example@gmail.com",
+            "mobile_phone": "6282323443535",
+            "disabled_login": false,
+            "expired_token": 0,
+            "expired_date": "2025-03-17T14:28:29.440Z",
+            "register_date": "2025-03-11T14:28:29.440Z",
+            "exp": "2025-03-17T14:28:29.440Z",
+            "picture": ""
+        }
+    }
     }
   ]
 }

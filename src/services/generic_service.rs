@@ -84,7 +84,7 @@ impl GenericService {
     
         (0..length)
             .map(|_| {
-                let idx = rng.gen_range(0..CHARS.len());
+                let idx = rng.random_range(0..CHARS.len());
                 CHARS[idx] as char
             })
             .collect()

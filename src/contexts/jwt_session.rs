@@ -1,7 +1,6 @@
 use jsonwebtoken::{decode, encode, Algorithm, DecodingKey, EncodingKey, Header, Validation};
 use serde::{Deserialize, Serialize};
 use chrono::{DateTime, Duration, Utc};
-use super::model::WebUser;
 
 const SECRET_KEY: &[u8] = b"supersecretkey"; // 🔥 Ganti dengan key yang lebih aman!
 

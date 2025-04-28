@@ -1,10 +1,10 @@
 use actix_web::{cookie::{time, Cookie, SameSite}, get, post, web, HttpRequest, HttpResponse, Responder, Scope};
 use bb8::Pool;
 use bb8_tiberius::ConnectionManager;
-use image::math;
+use serde_json::json;
 use crate::{
     contexts::{jwt_session::{create_jwt, validate_jwt, Claims}, 
-    model::{ActionResult, ChangePasswordRequest, LoginRequest, RegisterRequest, ResetPasswordRequest, WebUser}}, 
+    model::{ActionResult, ChangePasswordRequest, LoginRequest, RegisterRequest, ResetPasswordRequest}}, 
     services::{auth_service::AuthService, generic_service::GenericService}
 };
 
@@ -13,8 +13,8 @@ pub fn auth_scope() -> Scope {
     web::scope("/auth")
         .service(login)
         .service(register)
-        // .service(check_session)
-        // .service(logout)
+        .service(check_session)
+        .service(logout)
         .service(activation_user)
         .service(forget_password)
         .service(change_password)
@@ -46,7 +46,7 @@ async fn login(connection: web::Data<Pool<ConnectionManager>>, request: web::Jso
                             .path("/")
                             .http_only(true)
                             .same_site(SameSite::Strict)
-                            .secure(false) // Ubah ke `true` jika pakai HTTPS
+                            .secure(true) // Ubah ke `true` jika pakai HTTPS
                             .finish();
 
                         return HttpResponse::Ok()
@@ -66,59 +66,71 @@ async fn login(connection: web::Data<Pool<ConnectionManager>>, request: web::Jso
     }
 }
 
-// #[get("/session")]
-// async fn check_session() -> impl Responder {
+#[get("/session")]
+async fn check_session(req: HttpRequest, connection: web::Data<Pool<ConnectionManager>>) -> impl Responder {
 
-//     let mut result = ActionResult::default();
+    let mut result: ActionResult<Claims, _> = ActionResult::default();
 
-//     match identity.map(|id| id.id()) {
-//         None => {
-//             result.error = Some("Token not found".to_string());
-//             return HttpResponse::Unauthorized().json(result);
-//         },
-//         Some(Ok(token)) => {
-//             match validate_jwt(&token) {
-//                 Ok(claims) => {
-//                     result.result = true;
-//                     result.message = "Session active".to_string();
-//                     result.data = Some(claims);
-//                     return HttpResponse::Ok().json(result);
-//                 },
-//                 Err(err) => {
-//                     result.error = Some(err.to_string());
-//                     return HttpResponse::Unauthorized().json(result);
-//                 },
-//             }
-//         },
-//         Some(Err(_)) => {
-//             result.error = Some("Invalid token".to_string());
-//             return HttpResponse::BadRequest().json(result);
-//         },
-//     };
-// }
+    // Ambil cookie "token"
+    let token_cookie = req.cookie("token");
 
-// #[post("/logout")]
-// async fn logout(id: Identity) -> impl Responder {
-//     // Hapus sesi dari actix-identity
-    
-//     id.logout();
+    // Cek apakah token ada di cookie
+    let token = match token_cookie {
+        Some(cookie) => cookie.value().to_string(),
+        None => {
+            result.error = Some("Token not found".to_string());
+            return HttpResponse::Unauthorized().json(result);
+        }
+    };
 
-//     // Hapus cookie dengan setting expired date
-//     let cookie = Cookie::build("token", "")
-//         .path("/")
-//         .http_only(true)
-//         .same_site(SameSite::Strict)
-//         .secure(false) // Ubah ke true jika pakai HTTPS
-//         .max_age(time::Duration::days(-1)) // Set expired
-//         .finish();
+    // Validate token
+    match validate_jwt(&token) {
+        Ok(claims) => {
+            result = AuthService::check_session(connection, claims.clone(), token.clone(), token.clone(), false, false, true).await;
 
-//     HttpResponse::Ok()
-//         .cookie(cookie) // Hapus cookie dengan expired
-//         .json(serde_json::json!({
-//             "result": true,
-//             "message": "Logout successful, cookie deleted"
-//         }))
-// }
+            match result {
+                response if response.error.is_some() => {
+                    HttpResponse::InternalServerError().json(response)
+                },
+                response if response.result => {
+                    
+                    HttpResponse::Ok().json({
+                        json!({
+                            "result": response.result,
+                            "message": response.message,
+                            "data": Some(claims.clone())
+                        })
+                    })
+                },
+                response => HttpResponse::BadRequest().json(response), // Jika gagal login, HTTP 400
+            }
+        },
+        Err(err) => {
+            result.error = Some(err.to_string());
+            HttpResponse::Unauthorized().json(result)
+        },
+    }
+}
+
+#[post("/logout")]
+async fn logout() -> impl Responder {
+
+    // Hapus cookie dengan setting expired date
+    let cookie = Cookie::build("token", "")
+        .path("/")
+        .http_only(true)
+        .same_site(SameSite::Strict)
+        .secure(false) // Ubah ke true jika pakai HTTPS
+        .max_age(time::Duration::days(-1)) // Set expired
+        .finish();
+
+    HttpResponse::Ok()
+        .cookie(cookie) // Hapus cookie dengan expired
+        .json(serde_json::json!({
+            "result": true,
+            "message": "Logout successful, cookie deleted"
+        }))
+}
 
 #[post("/register")]
 async fn register(req: HttpRequest, pool: web::Data<Pool<ConnectionManager>>, mut request: web::Json<RegisterRequest>) -> impl Responder {

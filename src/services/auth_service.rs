@@ -4,7 +4,7 @@ use bb8_tiberius::ConnectionManager;
 use chrono::{NaiveDateTime, TimeZone, Utc};
 use tiberius::QueryStream;
 use crate::contexts::{
-    connection::Transaction, crypto::encrypt_text, jwt_session::{validate_jwt, Claims}, model::{ActionResult, ChangePasswordRequest, LoginRequest, RegisterRequest, ResetPasswordRequest, WebUser}
+    connection::Transaction, crypto::encrypt_text, jwt_session::{validate_jwt, Claims}, model::{ActionResult, ChangePasswordRequest, LoginRequest, RegisterRequest, ResetPasswordRequest}
 };
 use super::generic_service::GenericService;
 
@@ -557,7 +557,7 @@ impl AuthService {
                 }
     
                 result.result = true;
-                result.message = "User registered successfully".to_string();
+                result.message = "User active login".to_string();
             }
             Err(err) => {
                 result.error = Some(format!("Failed to start transaction: {:?}", err));
