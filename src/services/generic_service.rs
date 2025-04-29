@@ -69,6 +69,13 @@ impl GenericService {
     }
 
     pub async fn not_found(req: HttpRequest) -> impl Responder {
+
+        if req.path() == "/docs" {
+            return HttpResponse::Found()
+            .append_header(("Location", "/docs/index.html"))
+            .finish()
+        }
+
         HttpResponse::NotFound().json({
             json!({
                 "result": false,

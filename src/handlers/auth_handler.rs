@@ -20,11 +20,6 @@ pub fn auth_scope() -> Scope {
         .service(change_password)
 }
 
-#[utoipa::path(post, path = "/api/v1/auth/login",
-    responses(
-        (status = 200, description = "Login Success", body = ActionResult<Claims, String>)
-    )
-)]
 #[post("/login")]
 async fn login(connection: web::Data<Pool<ConnectionManager>>, request: web::Json<LoginRequest>) -> impl Responder {
 
@@ -71,11 +66,6 @@ async fn login(connection: web::Data<Pool<ConnectionManager>>, request: web::Jso
     }
 }
 
-#[utoipa::path(get, path = "/api/v1/auth/session",
-    responses(
-        (status = 200, description = "Check Session", body = ActionResult<Claims, String>)
-    )
-)]
 #[get("/session")]
 async fn check_session(req: HttpRequest, connection: web::Data<Pool<ConnectionManager>>) -> impl Responder {
 
@@ -122,11 +112,6 @@ async fn check_session(req: HttpRequest, connection: web::Data<Pool<ConnectionMa
     }
 }
 
-#[utoipa::path(post, path = "/api/v1/auth/logout", 
-    responses(
-        (status = 200, description = "Logout Success", body = serde_json::Value)
-    )
-)]
 #[post("/logout")]
 async fn logout() -> impl Responder {
 

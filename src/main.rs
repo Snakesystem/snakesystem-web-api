@@ -42,7 +42,7 @@ async fn main() -> ShuttleActixWeb<impl FnOnce(&mut ServiceConfig) + Send + Clon
             .service(auth_scope())
         )
         .service(
-            SwaggerUi::new("/swagger-ui/{_:.*}")
+            SwaggerUi::new("/docs/{_:.*}")
                 .url("/api-docs/openapi.json", ApiDoc::openapi())
         )
         .app_data(web::Data::new(db_pool.clone()))
