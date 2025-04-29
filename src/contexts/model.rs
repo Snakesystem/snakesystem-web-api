@@ -1,11 +1,12 @@
 use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
+use utoipa::ToSchema;
 use validator::Validate;
 use crate::utils::validation::validator::{
     required, valid_phone_number, valid_name, required_int, valid_password
 }; 
 
-#[derive(Debug, Serialize)]
+#[derive(Debug, Serialize, ToSchema)]
 pub struct ActionResult<T, E> {
     pub result: bool,
     pub message: String,
@@ -41,7 +42,7 @@ pub struct Company {
     pub company_name: String,
 }
 
-#[derive(Debug, Deserialize, Validate)]
+#[derive(Debug, Deserialize, Validate, ToSchema)]
 pub struct LoginRequest {
     #[validate(required, email(message = "Invalid email format"))]
     pub email: Option<String>,

@@ -1,6 +1,6 @@
 [package]
 name = "snakesystem-web-api"
-version = "0.1.0"
+version = "1.0.0"
 edition = "2021"
 
 include = ["templates/**/*"]
@@ -28,3 +28,7 @@ regex = "1.11.1"
 rand = "0.9.1"
 jsonwebtoken = "9.3.1"
 actix-session = { version = "0.10.1", features = ["cookie-session"] }
+
+# DEPENDENCIES SWAGGER UI
+utoipa = { version = "5.3.1", features = ["actix_extras", "chrono"] }
+utoipa-swagger-ui = { version = "9.0.1", features = ["actix-web"] }

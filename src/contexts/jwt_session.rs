@@ -1,10 +1,11 @@
 use jsonwebtoken::{decode, encode, Algorithm, DecodingKey, EncodingKey, Header, Validation};
 use serde::{Deserialize, Serialize};
 use chrono::{DateTime, Duration, Utc};
+use utoipa::ToSchema;
 
 const SECRET_KEY: &[u8] = b"supersecretkey"; // 🔥 Ganti dengan key yang lebih aman!
 
-#[derive(Debug, Serialize, Deserialize, Clone)]
+#[derive(Debug, Serialize, Deserialize, Clone, ToSchema)]
 pub struct Claims {
     pub result: bool,
     pub auth_usernid: i32,
