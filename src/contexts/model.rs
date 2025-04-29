@@ -51,7 +51,7 @@ pub struct LoginRequest {
     pub password: Option<String>,
 }
 
-#[derive(Debug, Deserialize, Validate)]
+#[derive(Debug, Deserialize, Validate, ToSchema)]
 pub struct RegisterRequest {
     #[validate(required, email(message = "Invalid email format"))]
     pub email: Option<String>,
@@ -78,13 +78,13 @@ pub struct RegisterRequest {
     pub app_ipaddress: String
 }
 
-#[derive(Debug, Deserialize, Validate)]
+#[derive(Debug, Deserialize, Validate, ToSchema)]
 pub struct ResetPasswordRequest {
     #[validate(required, email(message = "Invalid email format"))]
     pub email: Option<String>,
 }
 
-#[derive(Debug, Deserialize, Validate)]
+#[derive(Debug, Deserialize, Validate, ToSchema)]
 pub struct ChangePasswordRequest {
     #[validate(required, email(message = "Invalid email format"))]
     pub email: Option<String>,

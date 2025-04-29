@@ -21,9 +21,11 @@ pub fn auth_scope() -> Scope {
 }
 
 #[post("/login")]
-async fn login(connection: web::Data<Pool<ConnectionManager>>, request: web::Json<LoginRequest>) -> impl Responder {
+async fn login(req: HttpRequest, connection: web::Data<Pool<ConnectionManager>>, request: web::Json<LoginRequest>) -> impl Responder {
 
     let mut result: ActionResult<Claims, _> = AuthService::login(connection.clone(), request.into_inner()).await;
+
+    let token_cookie = req.cookie("token").unwrap().value().to_string();
 
     match result {
         response if response.error.is_some() => {
@@ -35,7 +37,7 @@ async fn login(connection: web::Data<Pool<ConnectionManager>>, request: web::Jso
                 match create_jwt(user.clone()) {
                     Ok(token) => {
                         // ✅ Simpan token dalam cookie
-                        result = AuthService::check_session(connection, user.clone(), token.clone(), "".to_string(), false, false, false).await;
+                        result = AuthService::check_session(connection, user.clone(), token.clone(), token_cookie, false, false, false).await;
 
                         // ✅ Jika berhasil, kembalikan JSON response
                         if result.error.is_some() {
@@ -48,6 +50,8 @@ async fn login(connection: web::Data<Pool<ConnectionManager>>, request: web::Jso
                             .same_site(SameSite::Strict)
                             .secure(true) // Ubah ke `true` jika pakai HTTPS
                             .finish();
+
+                        println!("✅ Token: {}, cookie: {}", token, cookie);
 
                         return HttpResponse::Ok()
                             .cookie(cookie)

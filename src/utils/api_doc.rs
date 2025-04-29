@@ -1,7 +1,7 @@
 use actix_web::{HttpResponse, Responder, get};
 use utoipa::{OpenApi, ToSchema};
 
-use crate::contexts::{jwt_session::Claims, model::{ActionResult, LoginRequest}};
+use crate::contexts::{jwt_session::Claims, model::{ActionResult, ChangePasswordRequest, LoginRequest, RegisterRequest, ResetPasswordRequest}};
 
 #[derive(serde::Serialize, ToSchema)]
 struct HealthCheckResponse {
@@ -33,10 +33,42 @@ struct HealthCheckResponse {
             "message": "Token not found", 
             "error": "Bad Request"
         }))
-    )
+    ),
+    tag = "Auth"
 )]
 #[allow(dead_code)]
 pub fn login_doc() {}
+
+// Register Docs
+#[utoipa::path(post, path = "/api/v1/auth/register", request_body = RegisterRequest,
+    responses(
+        (status = 200, description = "Check Session", body = ActionResult<Claims, String>, example = json!({"result": true, "message": "Login Success", "data": {
+            "user_id": "1",
+            "username": "admin",
+            "email": "LXh4N@example.com",
+            "company_id": "SS",
+            "company_name": "Snake System Tech"
+        }})),
+        (status = 401, description = "Unauthorized", body = ActionResult<String, String>, example = json!({
+            "result": false, 
+            "message": "Unauthorized", 
+            "error": "Unauthorized"
+        })),
+        (status = 500, description = "Internal Server Error", body = ActionResult<String, String>, example = json!({
+            "result": false, 
+            "message": "User not found", 
+            "error": "Internal Server Error"
+        })),
+        (status = 400, description = "Bad Request", body = ActionResult<String, String>, example = json!({
+            "result": false, 
+            "message": "Token not found", 
+            "error": "Bad Request"
+        }))
+    ),
+    tag = "Auth"
+)]
+#[allow(dead_code)]
+pub fn register_doc() {}
 
 // Check Session Docs
 #[utoipa::path(
@@ -68,6 +100,7 @@ pub fn login_doc() {}
             "error": "Bad Request"
         }))
     ),
+    tag = "Auth"
 )]
 #[allow(dead_code)]
 pub fn check_session_doc() {}
@@ -76,10 +109,91 @@ pub fn check_session_doc() {}
 #[utoipa::path(post, path = "/api/v1/auth/logout", 
     responses(
         (status = 200, description = "Logout Success", body = ActionResult<String, String>)
-    )
+    ),
+    tag = "Auth"
 )]
 #[allow(dead_code)]
 pub fn logout_doc() {}
+
+// Activation User Docs
+#[utoipa::path(
+    get,
+    path = "/api/v1/auth/activation/{otp_link}",
+    params(
+        ("otp_link" = String, Path, description = "Link OTP aktivasi user")
+    ),
+    responses(
+        (status = 200, description = "Aktivasi berhasil", body = ActionResult<String, String>, example = json!({
+            "result": true,
+            "message": "Akun berhasil diaktivasi",
+        })),
+        (status = 400, description = "OTP tidak valid", body = ActionResult<String, String>, example = json!({
+            "result": false,
+            "message": "OTP invalid",
+            "error": "Bad Request"
+        })),
+        (status = 500, description = "Gagal aktivasi", body = ActionResult<String, String>, example = json!({
+            "result": false,
+            "message": "Gagal aktivasi akun",
+            "error": "Internal Server Error"
+        }))
+    ),
+    tag = "Auth"
+)]
+#[allow(dead_code)]
+pub fn activation_user_doc() {}
+
+// Forget password User Docs
+#[utoipa::path(
+    post,
+    path = "/api/v1/auth/reset-password",
+    request_body = ResetPasswordRequest,
+    responses(
+        (status = 200, description = "Aktivasi berhasil", body = ActionResult<String, String>, example = json!({
+            "result": true,
+            "message": "Akun berhasil diaktivasi",
+        })),
+        (status = 400, description = "OTP tidak valid", body = ActionResult<String, String>, example = json!({
+            "result": false,
+            "message": "OTP invalid",
+            "error": "Bad Request"
+        })),
+        (status = 500, description = "Gagal aktivasi", body = ActionResult<String, String>, example = json!({
+            "result": false,
+            "message": "Gagal aktivasi akun",
+            "error": "Internal Server Error"
+        }))
+    ),
+    tag = "Auth"
+)]
+#[allow(dead_code)]
+pub fn reset_password_doc() {}
+
+// Forget password User Docs
+#[utoipa::path(
+    post,
+    path = "/api/v1/auth/change-password",
+    request_body = ChangePasswordRequest,
+    responses(
+        (status = 200, description = "Aktivasi berhasil", body = ActionResult<String, String>, example = json!({
+            "result": true,
+            "message": "Akun berhasil diaktivasi",
+        })),
+        (status = 400, description = "OTP tidak valid", body = ActionResult<String, String>, example = json!({
+            "result": false,
+            "message": "OTP invalid",
+            "error": "Bad Request"
+        })),
+        (status = 500, description = "Gagal aktivasi", body = ActionResult<String, String>, example = json!({
+            "result": false,
+            "message": "Gagal aktivasi akun",
+            "error": "Internal Server Error"
+        }))
+    ),
+    tag = "Auth"
+)]
+#[allow(dead_code)]
+pub fn change_password_doc() {}
 
 // Health Check Docs
 #[utoipa::path(
@@ -87,7 +201,8 @@ pub fn logout_doc() {}
     path = "/",
     responses(
         (status = 200, description = "Health Check Success", body = HealthCheckResponse, example = json!(HealthCheckResponse { message: "Welcome to the snakesystem app!".to_string(), }))
-    )
+    ),
+    tag = "Application Default Endpoints"
 )]
 
 #[get("/")]
@@ -102,14 +217,19 @@ pub async fn health_check() -> impl Responder {
     paths(
         health_check,
         login_doc,
+        register_doc,
+        reset_password_doc,
+        change_password_doc,
         check_session_doc,
         logout_doc,
+        activation_user_doc
     ),
     components(
         schemas(ActionResult<Claims, String>)
     ),
     tags(
-        (name = "Auth", description = "Authentication API")
+        (name = "Auth", description = "Authentication related endpoints"),
+        (name = "Application Default Endpoints", description = "Default path application endpoints"),
     )
 )]
 

@@ -441,6 +441,7 @@ impl AuthService {
     
                         if exist_session {
                             // 🔵 Check apakah user dan cookies/token cocok
+                            println!("🔵 Check apakah user dan cookies/token cocok");
                             let row_count = match conn.query(
                                 "SELECT COUNT(*) as count FROM WEB_Cookies WHERE AuthUserNID = @P1 AND Cookies = @P2",
                                 &[&session.auth_usernid, &active_token],
@@ -476,6 +477,7 @@ impl AuthService {
                             ).await;
                             result.result = true;
                         } else {
+                            print!("1 Masuk sini kali ya ");
                             if !cookies.is_empty() {
                                 // 🔵 Update cookies
                                 let _ = conn.execute(
@@ -484,12 +486,15 @@ impl AuthService {
                                 ).await;
                                 result.result = true;
                             } else {
+                                print!("2 Masuk sini kali ya ");
                                 // 🔵 Cari cookies existing
                                 let row_option = {
                                     let query_result = conn.query(
                                         "SELECT Cookies, LastUpdate FROM WEB_Cookies WHERE AuthUserNID = @P1",
                                         &[&session.auth_usernid],
                                     ).await;
+
+                                    print!("3 Masuk sini kali ya ");
 
                                     match query_result {
                                         Ok(rows) => rows.into_row().await.ok().flatten(),
@@ -500,8 +505,10 @@ impl AuthService {
                                     }
                                 }; // <- ❗️disini conn borrow selesai
 
+                                print!("4 Masuk sini kali ya ");
                                 // lanjut bebas pakai conn lagi disini
                                 if let Some(row) = row_option {
+                                    print!("5 Masuk sini kali ya ");
                                     let user_cookies: String = row.get::<&str, _>("Cookies").unwrap_or_default().to_string();
                                     let last_update: chrono::NaiveDateTime = row.get("LastUpdate").unwrap_or_else(|| chrono::Utc::now().naive_utc());
 
@@ -516,16 +523,19 @@ impl AuthService {
                                     ).unwrap_or_else(|_| chrono::Utc::now().naive_utc());
 
                                     if expired_dt > chrono::Utc::now().naive_utc() {
+                                        print!("6 Masuk sini kali ya ");
                                         result.message = format!(
                                             "This user ({}) with IP:{} is already logged in from another browser/machine (LastUpdate: {}), are you sure you want to kick this logged in user?",
                                             session.email,
                                             session.mobile_phone,
                                             last_update.format("%Y-%m-%d %H:%M")
                                         );
+                                        
                                         result.data = Some(session);
                                         return result;
                                     } else {
                                         // 🔵 Expired, Update ke token baru
+                                        print!("7 Masuk sini kali ya ");
                                         let _ = conn.execute(
                                             "UPDATE WEB_Cookies SET Cookies = @P1, LastUpdate = GETDATE() WHERE AuthUserNID = @P2",
                                             &[&token, &session.auth_usernid],
@@ -534,6 +544,7 @@ impl AuthService {
                                     }
                                 } else {
                                     // 🔵 Insert baru
+                                    print!("8 Masuk sini kali ya ");
                                     let _ = conn.execute(
                                         "INSERT INTO WEB_Cookies (AuthUserNID, Cookies, AppComputerName, AppIPAddress, LastUpdate) VALUES (@P1, @P2, @P3, @P4, GETDATE())",
                                         &[&session.auth_usernid, &token, &session.picture, &session.mobile_phone],
