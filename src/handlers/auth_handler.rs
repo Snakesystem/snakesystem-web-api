@@ -25,7 +25,7 @@ async fn login(req: HttpRequest, connection: web::Data<Pool<ConnectionManager>>,
 
     let mut result: ActionResult<Claims, _> = AuthService::login(connection.clone(), request.into_inner()).await;
 
-    let token_cookie = req.cookie("token").unwrap().value().to_string();
+    let token_cookie = req.cookie("snakesystem").map(|c| c.value().to_string()).unwrap_or_default();
 
     match result {
         response if response.error.is_some() => {
@@ -37,21 +37,21 @@ async fn login(req: HttpRequest, connection: web::Data<Pool<ConnectionManager>>,
                 match create_jwt(user.clone()) {
                     Ok(token) => {
                         // ✅ Simpan token dalam cookie
-                        result = AuthService::check_session(connection, user.clone(), token.clone(), token_cookie, false, false, false).await;
+                        result = AuthService::check_session(connection, user.clone(), token.clone(), token_cookie.clone(), false, false, false).await;
 
                         // ✅ Jika berhasil, kembalikan JSON response
-                        if result.error.is_some() {
+                        if !result.result {
                             return HttpResponse::InternalServerError().json(result);
                         }
                             
-                        let cookie = Cookie::build("token", token.clone())
+                        let cookie = Cookie::build("snakesystem", token_cookie.is_empty().then(|| token.clone()).unwrap_or(token_cookie.clone()))
                             .path("/")
                             .http_only(true)
                             .same_site(SameSite::Strict)
-                            .secure(true) // Ubah ke `true` jika pakai HTTPS
+                            .secure(false) // Ubah ke `true` jika pakai HTTPS
                             .finish();
 
-                        println!("✅ Token: {}, cookie: {}", token, cookie);
+                        println!("cookies: {}", cookie.value());
 
                         return HttpResponse::Ok()
                             .cookie(cookie)
@@ -76,7 +76,7 @@ async fn check_session(req: HttpRequest, connection: web::Data<Pool<ConnectionMa
     let mut result: ActionResult<Claims, _> = ActionResult::default();
 
     // Ambil cookie "token"
-    let token_cookie = req.cookie("token");
+    let token_cookie = req.cookie("snakesystem");
 
     // Cek apakah token ada di cookie
     let token = match token_cookie {
