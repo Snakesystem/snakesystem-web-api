@@ -29,8 +29,6 @@ async fn login(req: HttpRequest, connection: web::Data<Pool<ConnectionManager>>,
 
     let token_cookie = req.cookie("snakesystem").map(|c| c.value().to_string()).unwrap_or_default();
 
-    let is_localhost = GenericService::is_localhost_origin(&req); // pass `req` into your handler
-
     match result {
         response if response.error.is_some() => {
             HttpResponse::InternalServerError().json(response)
@@ -51,9 +49,9 @@ async fn login(req: HttpRequest, connection: web::Data<Pool<ConnectionManager>>,
                         let cookie = Cookie::build("snakesystem", token_cookie.is_empty().then(|| token.clone()).unwrap_or(token_cookie.clone()))
                             .path("/")
                             .http_only(true)
-                            .same_site(SameSite::Lax)
-                            .secure(!is_localhost) // Ubah ke `true` jika pakai HTTPS
-                            .expires(time::OffsetDateTime::now_utc() + time::Duration::days(1))
+                            .same_site(SameSite::None) // ❗ WAJIB None agar cookie cross-site
+                            .secure(true)     
+                            .expires(time::OffsetDateTime::now_utc() + time::Duration::days(2)) // Set expired 2 hari
                             .finish();
 
                         return HttpResponse::Ok()
