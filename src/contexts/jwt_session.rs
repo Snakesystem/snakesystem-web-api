@@ -17,6 +17,9 @@ pub struct Claims {
     pub register_date: DateTime<Utc>,
     pub exp: usize,
     pub picture: Option<String>,
+    pub comp_name: Option<String>,
+    pub ip_address: Option<String>,
+    pub app_name: Option<String>,
 }
 
 impl Claims {
@@ -36,6 +39,9 @@ impl Claims {
             picture: user.picture,
             register_date: user.register_date,
             exp, // 🔥 Tambahkan ke struct
+            comp_name: user.comp_name,
+            ip_address: user.ip_address,
+            app_name: user.app_name,
         }
     }
 }

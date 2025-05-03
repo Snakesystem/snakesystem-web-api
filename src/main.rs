@@ -1,3 +1,4 @@
+use actix_cors::Cors;
 use actix_web::web::{self, route, ServiceConfig};
 use contexts::connection::{create_pool, DbPool};
 use handlers::{auth_handler::auth_scope, generic_handler::generic_scope};
@@ -34,10 +35,21 @@ async fn main() -> ShuttleActixWeb<impl FnOnce(&mut ServiceConfig) + Send + Clon
     let db_pool: DbPool = create_pool("db12877").await.unwrap();
 
     let config = move |cfg: &mut ServiceConfig| {
+        let cors = Cors::default()
+            .allowed_origin_fn(|origin, _req_head| {
+                origin.as_bytes().starts_with(b"http://localhost") ||
+                origin.as_bytes().starts_with(b"https://snakesystem-web-api-tdam.shuttle.app")
+            })
+            .allow_any_method()
+            .allow_any_header()
+            
+            .supports_credentials();
+        
         cfg
         .service(health_check)
         .service(
             web::scope("/api/v1")
+            .wrap(cors)
             .service(generic_scope())
             .service(auth_scope())
         )

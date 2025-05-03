@@ -1,4 +1,4 @@
-use actix_web::web;
+use actix_web::{web, HttpRequest};
 use bb8::Pool;
 use bb8_tiberius::ConnectionManager;
 use chrono::{NaiveDateTime, TimeZone, Utc};
@@ -11,7 +11,7 @@ use super::generic_service::GenericService;
 pub struct AuthService;
 
 impl AuthService {
-    pub async fn login(connection: web::Data<Pool<ConnectionManager>>,request: LoginRequest) -> ActionResult<Claims, String> {
+    pub async fn login(connection: web::Data<Pool<ConnectionManager>>,request: LoginRequest, req: HttpRequest, app_name: &str) -> ActionResult<Claims, String> {
         
         let mut result: ActionResult<Claims, String> = ActionResult::default();
         let enc_password = encrypt_text(request.password.unwrap_or_default());
@@ -39,7 +39,10 @@ impl AuthService {
                                 result: true,
                                 expired_token: 0,
                                 expired_date: "".to_string(),
-                                exp: 0, // Default jika kosong
+                                exp: 0, // Default jika kosong,
+                                comp_name: Some(GenericService::get_device_name(&req)),
+                                ip_address: Some(GenericService::get_ip_address(&req)),
+                                app_name: Some(app_name.to_string()),
                             }); 
 
                             return result;
@@ -477,7 +480,6 @@ impl AuthService {
                             ).await;
                             result.result = true;
                         } else {
-                            print!("1 Masuk sini kali ya ");
                             if !cookies.is_empty() {
                                 // 🔵 Update cookies
                                 let _ = conn.execute(
@@ -486,15 +488,12 @@ impl AuthService {
                                 ).await;
                                 result.result = true;
                             } else {
-                                print!("2 Masuk sini kali ya ");
                                 // 🔵 Cari cookies existing
                                 let row_option = {
                                     let query_result = conn.query(
                                         "SELECT Cookies, LastUpdate FROM WEB_Cookies WHERE AuthUserNID = @P1",
                                         &[&session.auth_usernid],
                                     ).await;
-
-                                    print!("3 Masuk sini kali ya ");
 
                                     match query_result {
                                         Ok(rows) => rows.into_row().await.ok().flatten(),
@@ -505,10 +504,8 @@ impl AuthService {
                                     }
                                 }; // <- ❗️disini conn borrow selesai
 
-                                print!("4 Masuk sini kali ya ");
                                 // lanjut bebas pakai conn lagi disini
                                 if let Some(row) = row_option {
-                                    print!("5 Masuk sini kali ya ");
                                     let user_cookies: String = row.get::<&str, _>("Cookies").unwrap_or_default().to_string();
                                     let last_update: chrono::NaiveDateTime = row.get("LastUpdate").unwrap_or_else(|| chrono::Utc::now().naive_utc());
 
@@ -523,11 +520,10 @@ impl AuthService {
                                     ).unwrap_or_else(|_| chrono::Utc::now().naive_utc());
 
                                     if expired_dt > chrono::Utc::now().naive_utc() {
-                                        print!("6 Masuk sini kali ya ");
                                         result.message = format!(
                                             "This user ({}) with IP:{} is already logged in from another browser/machine (LastUpdate: {}), are you sure you want to kick this logged in user?",
                                             session.email,
-                                            session.mobile_phone,
+                                            session.ip_address.clone().expect("IP address not found"),
                                             last_update.format("%Y-%m-%d %H:%M")
                                         );
                                         
@@ -535,7 +531,6 @@ impl AuthService {
                                         return result;
                                     } else {
                                         // 🔵 Expired, Update ke token baru
-                                        print!("7 Masuk sini kali ya ");
                                         let _ = conn.execute(
                                             "UPDATE WEB_Cookies SET Cookies = @P1, LastUpdate = GETDATE() WHERE AuthUserNID = @P2",
                                             &[&token, &session.auth_usernid],
@@ -544,10 +539,9 @@ impl AuthService {
                                     }
                                 } else {
                                     // 🔵 Insert baru
-                                    print!("8 Masuk sini kali ya ");
                                     let _ = conn.execute(
                                         "INSERT INTO WEB_Cookies (AuthUserNID, Cookies, AppComputerName, AppIPAddress, LastUpdate) VALUES (@P1, @P2, @P3, @P4, GETDATE())",
-                                        &[&session.auth_usernid, &token, &session.picture, &session.mobile_phone],
+                                        &[&session.auth_usernid, &token, &session.comp_name, &session.ip_address],
                                     ).await;
                                     result.result = true;
                                 }

@@ -8,6 +8,8 @@ use crate::{
     services::{auth_service::AuthService, generic_service::GenericService}
 };
 
+const APP_NAME: &str = "snakesystem-web-api";
+
 pub fn auth_scope() -> Scope {
     
     web::scope("/auth")
@@ -23,9 +25,11 @@ pub fn auth_scope() -> Scope {
 #[post("/login")]
 async fn login(req: HttpRequest, connection: web::Data<Pool<ConnectionManager>>, request: web::Json<LoginRequest>) -> impl Responder {
 
-    let mut result: ActionResult<Claims, _> = AuthService::login(connection.clone(), request.into_inner()).await;
+    let mut result: ActionResult<Claims, _> = AuthService::login(connection.clone(), request.into_inner(), req.clone(), APP_NAME).await;
 
     let token_cookie = req.cookie("snakesystem").map(|c| c.value().to_string()).unwrap_or_default();
+
+    let is_localhost = GenericService::is_localhost_origin(&req); // pass `req` into your handler
 
     match result {
         response if response.error.is_some() => {
@@ -47,11 +51,10 @@ async fn login(req: HttpRequest, connection: web::Data<Pool<ConnectionManager>>,
                         let cookie = Cookie::build("snakesystem", token_cookie.is_empty().then(|| token.clone()).unwrap_or(token_cookie.clone()))
                             .path("/")
                             .http_only(true)
-                            .same_site(SameSite::Strict)
-                            .secure(false) // Ubah ke `true` jika pakai HTTPS
+                            .same_site(SameSite::Lax)
+                            .secure(!is_localhost) // Ubah ke `true` jika pakai HTTPS
+                            .expires(time::OffsetDateTime::now_utc() + time::Duration::days(1))
                             .finish();
-
-                        println!("cookies: {}", cookie.value());
 
                         return HttpResponse::Ok()
                             .cookie(cookie)
@@ -123,8 +126,8 @@ async fn logout() -> impl Responder {
     let cookie = Cookie::build("token", "")
         .path("/")
         .http_only(true)
-        .same_site(SameSite::Strict)
-        .secure(false) // Ubah ke true jika pakai HTTPS
+        .same_site(SameSite::None)
+        .secure(true) // Ubah ke true jika pakai HTTPS
         .max_age(time::Duration::days(-1)) // Set expired
         .finish();
 

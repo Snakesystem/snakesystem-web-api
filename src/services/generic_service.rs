@@ -51,10 +51,7 @@ impl GenericService {
         }
     }
 
-    pub fn json_error_handler(
-        err: error::JsonPayloadError,
-        _req: &actix_web::HttpRequest,
-    ) -> actix_web::Error {
+    pub fn json_error_handler(err: error::JsonPayloadError, _req: &actix_web::HttpRequest) -> actix_web::Error {
         let error_message = format!("Json deserialize error: {}", err);
 
         let result = ActionResult::<String, _> {
@@ -108,4 +105,26 @@ impl GenericService {
                 |ip| ip.to_string(),
             )
     }
+
+    pub fn get_device_name(req: &HttpRequest) -> String {
+        let test = req.headers()
+            .get("X-Forwarded-Host")
+            .and_then(|ua| ua.to_str().ok())
+            .map_or_else(
+                || "Unknown Device".to_string(),
+                |ua| ua.to_string(),
+            );
+
+        return test
+    }
+
+    pub fn is_localhost_origin(req: &HttpRequest) -> bool {
+        if let Some(origin) = req.headers().get("Origin") {
+            if let Ok(origin_str) = origin.to_str() {
+                return origin_str.starts_with("http://localhost");
+            }
+        }
+        false
+    }
+    
 }
