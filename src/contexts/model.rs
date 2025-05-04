@@ -105,3 +105,11 @@ pub struct WebUser {
     #[serde(serialize_with = "serialize_datetime")]
     pub register_date: chrono::DateTime<Utc>
 }
+
+#[derive(Debug,Deserialize, Serialize)]
+pub struct ContactRequest {
+    pub name: String,
+    pub email: String,
+    pub subject: String,
+    pub message: String,
+}
