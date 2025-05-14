@@ -113,3 +113,11 @@ pub struct ContactRequest {
     pub subject: String,
     pub message: String,
 }
+
+#[derive(Debug, Deserialize,Serialize)]
+pub struct EmailRequest {
+    pub name: String,
+    pub subject: String,
+    pub recipient: String,
+    pub message: String,
+}

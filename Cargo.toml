@@ -16,7 +16,7 @@ bb8-tiberius = "0.16.0"
 serde = { version = "1.0.218", features = ["derive"] }
 serde_json = "1.0.140"
 handlebars = "6.3.1"
-reqwest = { version = "0.12.15", features = ["blocking", "json"] }
+reqwest = { version = "0.12.15", features = ["blocking", "json", "rustls-tls"] }
 chrono = { version = "0.4.40", features = ["serde"] }
 aes = "0.8.4"
 sha2 = "0.10.8"

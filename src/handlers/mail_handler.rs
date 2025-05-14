@@ -1,60 +1,57 @@
 use actix_web::{post, web, HttpResponse, Responder, Scope};
 use lettre::{transport::smtp::authentication::Credentials, Message, SmtpTransport, Transport as _};
 
-use crate::contexts::model::ContactRequest;
+use crate::{contexts::model::{ContactRequest, EmailRequest}, services::mail_service::MailService};
 
 pub fn mail_scope() -> Scope {
     
     web::scope("/email")
         .service(contact_form)
+        .service(send_campaign)
 }
 
 #[post("/contact")]
-async fn contact_form(form: web::Json<ContactRequest>) -> impl Responder {
+async fn contact_form(form: web::Json<EmailRequest>) -> impl Responder {
     let contact = form.into_inner();
+    
+    let result = MailService::send_email(contact);
 
-    // Email kamu
-    let to_email = "feryirawansyah09@gmail.com";
-    let from_email = "8cf4d6001@smtp-brevo.com";
-    let password = "1qhSR2QDKFBJTLfg"; // Bukan password Gmail biasa!
+    if result.result {
+        HttpResponse::Ok().json(result)
+    } else {
+        HttpResponse::InternalServerError().json(result)
+    }
+}
 
-    // Format email
+#[post("/send-campaign")]
+async fn send_campaign(req: web::Json<ContactRequest>) -> impl Responder {
+    let smtp_username = "8cf4d6002@smtp-brevo.com"; // Login dari Brevo
+    let smtp_password = "m0bfcwQOYXkvr6qp";           // Ambil dari SMTP Brevo
+    let smtp_server = "smtp-relay.brevo.com";
+
     let email = Message::builder()
-        .from(from_email.parse().unwrap())
-        .reply_to(contact.email.parse().unwrap())
-        .to(to_email.parse().unwrap())
-        .subject(format!("Pesan dari {}", contact.name))
-        .header(lettre::message::header::ContentType::TEXT_PLAIN)
-        .body(format!(
-            "Nama: {}\nEmail: {}\n\nPesan:\n{}",
-            contact.name, contact.email, contact.message
-        ))
-        .unwrap();
+    .from("techsnakesystem@gmail.com".parse().unwrap())
+    .reply_to("feryirawansyah09@gmail.com".parse().unwrap()) // kalau ini email verified
+    .to("ir15y4hh@gmail.com".parse().unwrap())
+    .subject(&req.subject)
+    .body(String::from("<h1>Hello</h1><p>This is a test from Rust!</p>"))
+    .unwrap();
 
+    let creds = Credentials::new(smtp_username.to_string(), smtp_password.to_string());
 
-    // Konfigurasi SMTP Gmail
-    let creds = Credentials::new(from_email.to_string(), password.to_string());
-
-    let mailer = SmtpTransport::starttls_relay("smtp-relay.brevo.com")
+    let mailer = SmtpTransport::relay(smtp_server)
         .unwrap()
         .credentials(creds)
         .build();
 
     match mailer.send(&email) {
         Ok(res) => {
-            println!("Email terkirim: {:#?}", res);
-            HttpResponse::Ok()
-            .json(serde_json::json!({
-                "result": true,
-                "message": "Logout successful, cookie deleted"
-            }))
+            println!("Email sent: {:#?}", res);
+            HttpResponse::Ok().body("Email sent successfully!")
         },
         Err(e) => {
-            println!("Gagal kirim email: {:?}", e);
-            HttpResponse::InternalServerError().json(serde_json::json!({
-                "result": false,
-                "message": "Failed to send email"
-            }))
+            eprintln!("Failed to send email: {e}");
+            HttpResponse::InternalServerError().body(format!("Email failed: {e}"))
         }
     }
 }

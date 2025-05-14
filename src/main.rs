@@ -18,6 +18,7 @@ mod contexts {
 mod services {
     pub mod generic_service;
     pub mod auth_service;
+    pub mod mail_service;
 }
 
 mod handlers {
