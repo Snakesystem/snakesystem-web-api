@@ -38,7 +38,9 @@ async fn main() -> ShuttleActixWeb<impl FnOnce(&mut ServiceConfig) + Send + Clon
 
     let config = move |cfg: &mut ServiceConfig| {
         let cors = Cors::default()
-            .allowed_origin("http://localhost:5173") // Atau pakai .allow_any_origin() di dev
+            .allow_any_origin() // Atau pakai .allow_any_origin() dynamic app https only
+            // .allowed_origin("http://localhost:5173") // url development
+            // .allowed_origin("https://snakesystem.github.io") // url production
             .allowed_methods(vec!["GET", "POST", "OPTIONS"])
             .allowed_headers(vec![http::header::CONTENT_TYPE])
             .max_age(3600)
