@@ -1,7 +1,7 @@
 use actix_cors::Cors;
 use actix_web::{http, web::{self, route, ServiceConfig}};
 use contexts::connection::{create_pool, DbPool};
-use handlers::{auth_handler::auth_scope, email_handler::email_scope, generic_handler::generic_scope};
+use handlers::{auth_handler::auth_scope, mail_handler::mail_scope, generic_handler::generic_scope};
 use services::generic_service::GenericService;
 use shuttle_actix_web::ShuttleActixWeb;
 use utils::api_doc::{health_check, ApiDoc};
@@ -23,7 +23,7 @@ mod services {
 mod handlers {
     pub mod generic_handler;
     pub mod auth_handler;
-    pub mod email_handler;
+    pub mod mail_handler;
 }
 
 mod utils {
@@ -50,7 +50,7 @@ async fn main() -> ShuttleActixWeb<impl FnOnce(&mut ServiceConfig) + Send + Clon
             .wrap(cors)
             .service(generic_scope())
             .service(auth_scope())
-            .service(email_scope())
+            .service(mail_scope())
         )
         .service(
             SwaggerUi::new("/docs/{_:.*}")

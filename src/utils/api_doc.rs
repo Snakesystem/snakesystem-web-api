@@ -34,7 +34,7 @@ struct HealthCheckResponse {
             "error": "Bad Request"
         }))
     ),
-    tag = "Auth"
+    tag = "1. Auth"
 )]
 #[allow(dead_code)]
 pub fn login_doc() {}
@@ -65,7 +65,7 @@ pub fn login_doc() {}
             "error": "Bad Request"
         }))
     ),
-    tag = "Auth"
+    tag = "1. Auth"
 )]
 #[allow(dead_code)]
 pub fn register_doc() {}
@@ -74,6 +74,8 @@ pub fn register_doc() {}
 #[utoipa::path(
     get,
     path = "/api/v1/auth/session",
+    summary = "Cek sesi login pengguna",
+    description = "`Wajib login terlebih dahulu. Memerlukan token dari cookies` untuk mengecek sesi login pengguna",
     responses(
         (status = 200, description = "Check Session", body = ActionResult<Claims, String>, example = json!({
             "result": true,
@@ -100,7 +102,7 @@ pub fn register_doc() {}
             "error": "Bad Request"
         }))
     ),
-    tag = "Auth"
+    tag = "1. Auth"
 )]
 #[allow(dead_code)]
 pub fn check_session_doc() {}
@@ -110,7 +112,7 @@ pub fn check_session_doc() {}
     responses(
         (status = 200, description = "Logout Success", body = ActionResult<String, String>)
     ),
-    tag = "Auth"
+    tag = "1. Auth"
 )]
 #[allow(dead_code)]
 pub fn logout_doc() {}
@@ -138,7 +140,7 @@ pub fn logout_doc() {}
             "error": "Internal Server Error"
         }))
     ),
-    tag = "Auth"
+    tag = "1. Auth"
 )]
 #[allow(dead_code)]
 pub fn activation_user_doc() {}
@@ -164,7 +166,7 @@ pub fn activation_user_doc() {}
             "error": "Internal Server Error"
         }))
     ),
-    tag = "Auth"
+    tag = "1. Auth"
 )]
 #[allow(dead_code)]
 pub fn reset_password_doc() {}
@@ -190,7 +192,7 @@ pub fn reset_password_doc() {}
             "error": "Internal Server Error"
         }))
     ),
-    tag = "Auth"
+    tag = "1. Auth"
 )]
 #[allow(dead_code)]
 pub fn change_password_doc() {}
@@ -202,7 +204,7 @@ pub fn change_password_doc() {}
     responses(
         (status = 200, description = "Health Check Success", body = HealthCheckResponse, example = json!(HealthCheckResponse { message: "Welcome to the snakesystem app!".to_string(), }))
     ),
-    tag = "Application Default Endpoints"
+    tag = "0. Application Default Endpoints"
 )]
 
 #[get("/")]
@@ -214,6 +216,11 @@ pub async fn health_check() -> impl Responder {
 
 #[derive(OpenApi)]
 #[openapi(
+    info(
+        title = "Snakesystem API",
+        description = "Dokumentasi untuk RESTful API SnakeSystem.\n\nSilakan gunakan token JWT untuk mengakses endpoint yang dilindungi.",
+        version = "1.0.0"
+    ),
     paths(
         health_check,
         login_doc,
@@ -228,8 +235,8 @@ pub async fn health_check() -> impl Responder {
         schemas(ActionResult<Claims, String>)
     ),
     tags(
-        (name = "Auth", description = "Authentication related endpoints"),
-        (name = "Application Default Endpoints", description = "Default path application endpoints"),
+        (name = "0. Application Default Endpoints", description = "Default path application endpoints"),
+        (name = "1. Auth", description = "Authentication related endpoints"),
     )
 )]
 
