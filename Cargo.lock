@@ -3232,7 +3232,6 @@ dependencies = [
  "handlebars",
  "image",
  "jsonwebtoken",
- "lazy_static",
  "lettre",
  "rand 0.9.1",
  "regex",

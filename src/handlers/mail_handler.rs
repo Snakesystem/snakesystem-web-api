@@ -11,7 +11,8 @@ pub fn mail_scope() -> Scope {
     web::scope("/email")
         .service(contact_form)
         .service(send_campaign)
-        .service(preview_email)
+        .service(preview_email_to)
+        .service(preview_email_from)
 }
 
 #[post("/contact")]
@@ -40,8 +41,8 @@ async fn contact_form(form: web::Json<EmailRequest>) -> impl Responder {
     }
 }
 
-#[get("/preview-email")]
-async fn preview_email() -> impl Responder {
+#[get("/preview-email-to")]
+async fn preview_email_to() -> impl Responder {
     let mut handlebars = Handlebars::new();
 
     // Baca file mustache-nya
@@ -61,6 +62,33 @@ async fn preview_email() -> impl Responder {
     data.insert("url", "http://localhost:8000/api/v1/auth/activation/hdhshsdbshdbshd");
 
     let rendered = handlebars.render("mail_to", &data).unwrap();
+
+    HttpResponse::Ok()
+        .content_type("text/html; charset=utf-8")
+        .body(rendered)
+}
+
+#[get("/preview-email-from")]
+async fn preview_email_from() -> impl Responder {
+    let mut handlebars = Handlebars::new();
+
+    // Baca file mustache-nya
+    let template_str = fs::read_to_string("templates/mail_from.mustache")
+        .expect("Gagal baca template");
+
+    handlebars
+        .register_template_string("mail_from", template_str)
+        .expect("Gagal daftarin template");
+
+    // Data dummy buat preview
+    let mut data = HashMap::new();
+    data.insert("subject", "Ini Judul Email Contoh");
+    data.insert("message", "Ini isi pesan email yang bisa kamu ubah dan lihat hasilnya langsung di browser.");
+    data.insert("recipient", "ir15y4hh@gmail.com");
+    data.insert("name", "Dede Sukron");
+    data.insert("url", "http://localhost:8000/api/v1/auth/activation/hdhshsdbshdbshd");
+
+    let rendered = handlebars.render("mail_from", &data).unwrap();
 
     HttpResponse::Ok()
         .content_type("text/html; charset=utf-8")
