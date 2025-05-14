@@ -114,7 +114,7 @@ pub struct ContactRequest {
     pub message: String,
 }
 
-#[derive(Debug, Deserialize,Serialize)]
+#[derive(Debug, Deserialize,Serialize, ToSchema)]
 pub struct EmailRequest {
     pub name: String,
     pub subject: String,

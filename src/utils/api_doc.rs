@@ -1,7 +1,7 @@
 use actix_web::{HttpResponse, Responder, get};
 use utoipa::{OpenApi, ToSchema};
 
-use crate::contexts::{jwt_session::Claims, model::{ActionResult, ChangePasswordRequest, LoginRequest, RegisterRequest, ResetPasswordRequest}};
+use crate::contexts::{jwt_session::Claims, model::{ActionResult, ChangePasswordRequest, EmailRequest, LoginRequest, RegisterRequest, ResetPasswordRequest}};
 
 #[derive(serde::Serialize, ToSchema)]
 struct HealthCheckResponse {
@@ -197,6 +197,32 @@ pub fn reset_password_doc() {}
 #[allow(dead_code)]
 pub fn change_password_doc() {}
 
+// Forget password User Docs
+#[utoipa::path(
+    post,
+    path = "/api/v1/email/contact",
+    request_body = EmailRequest,
+    responses(
+        (status = 200, description = "Succes sent email", body = ActionResult<String, String>, example = json!({
+            "result": true,
+            "message": "Email sent successfully!",
+        })),
+        (status = 400, description = "Bad request response", body = ActionResult<String, String>, example = json!({
+            "result": false,
+            "message": "Recipient not found",
+            "error": "Bad Request"
+        })),
+        (status = 500, description = "Internet server error", body = ActionResult<String, String>, example = json!({
+            "result": false,
+            "message": "Email failed to send",
+            "error": "Internal Server Error"
+        }))
+    ),
+    tag = "2. Email Endpoints"
+)]
+#[allow(dead_code)]
+pub fn contact_form_doc() {}
+
 // Health Check Docs
 #[utoipa::path(
     get,
@@ -229,7 +255,8 @@ pub async fn health_check() -> impl Responder {
         change_password_doc,
         check_session_doc,
         logout_doc,
-        activation_user_doc
+        activation_user_doc,
+        contact_form_doc
     ),
     components(
         schemas(ActionResult<Claims, String>)
@@ -237,6 +264,7 @@ pub async fn health_check() -> impl Responder {
     tags(
         (name = "0. Application Default Endpoints", description = "Default path application endpoints"),
         (name = "1. Auth", description = "Authentication related endpoints"),
+        (name = "2. Email Endpoints", description = "Mailer to send email related endpoints"),
     )
 )]
 
