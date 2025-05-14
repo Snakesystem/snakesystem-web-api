@@ -1,0 +1,92 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <style>
+    body {
+      font-family: 'Helvetica Neue', sans-serif;
+      margin: 0;
+      padding: 0;
+      background:rgb(246, 254, 255);
+    }
+
+    .email-wrapper {
+      max-width: 640px;
+      margin: 40px auto;
+      background: #ffffff;
+      border-radius: 10px;
+      overflow: hidden;
+      box-shadow: 0 4px 12px rgba(0,0,0,0.1);
+    }
+
+    .email-header {
+      background: linear-gradient(45deg, #00acc1, #26c6da);
+      color: white;
+      padding: 30px;
+      text-align: center;
+    }
+
+    .email-header h1 {
+      margin: 0;
+    }
+
+    .email-content {
+      padding: 30px;
+      color: #444;
+      font-size: 15px;
+      text-align: center;
+    }
+
+    .email-content img.big-icon {
+      width: 100px;
+      margin-bottom: 20px;
+    }
+
+    .email-footer {
+      background: #f0f0f0;
+      padding: 20px;
+      text-align: center;
+      font-size: 13px;
+      color: #777;
+    }
+
+    .social-icons img {
+      width: 24px;
+      margin: 0 8px;
+    }
+
+    .activation-link {
+      display: inline-block;
+      background: linear-gradient(45deg, #00acc1, #26c6da);
+      color: white;
+      padding: 10px 20px;
+      border-radius: 5px;
+      text-decoration: none;
+      margin-top: 20px;
+    }
+  </style>
+</head>
+<body>
+  <div class="email-wrapper">
+    <div class="email-header">
+      <h1>Hi, {{name}}👋</h1>
+      <h2>Pesan anda telah diterima</h2>
+    </div>
+    <div class="email-content">
+      <p>Permintaan kamu untuk <strong>{{subject}}</strong> telah diterima oleh kami. Terima kasih!</p>
+      <img class="big-icon" src="https://cdn-icons-png.flaticon.com/512/561/561127.png" alt="Success Icon" />
+      <p>{{message}}</p>
+      <a target="_blank" class="activation-link" href="{{url}}">Activation Link</a>
+    </div>
+    <div class="email-footer">
+      <p>© 2025 Tech Snake System, Indonesia</p>
+      <div class="social-icons">
+        <a href="#" target="_blank"><img src="https://cdn-icons-png.flaticon.com/512/733/733547.png" alt="FB" /></a>
+        <a href="#" target="_blank"><img src="https://cdn-icons-png.flaticon.com/512/733/733561.png" alt="Linkedin" /></a>
+        <a href="#" target="_blank"><img src="https://cdn-icons-png.flaticon.com/512/733/733558.png" alt="Twitter" /></a>
+        <a href="https://snakesystem.github.io" target="_blank"><img src="https://snakesystem.github.io/favicon.ico" alt="snake" /></a>
+      </div>
+    </div>
+  </div>
+</body>
+</html>
