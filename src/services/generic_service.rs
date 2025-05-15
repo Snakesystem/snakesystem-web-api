@@ -1,3 +1,5 @@
+use std::env;
+
 use actix_web::{error, web, HttpRequest, HttpResponse, Responder};
 use bb8::Pool;
 use bb8_tiberius::ConnectionManager;
@@ -125,6 +127,19 @@ impl GenericService {
             }
         }
         false
+    }
+
+    pub fn get_secret_key() -> [u8; 32] {
+        let key_str = std::env::var("JWT_KEY").expect("JWT_KEY not set");
+        let key_bytes = key_str.as_bytes();
+
+        if key_bytes.len() != 32 {
+            panic!("JWT_KEY must be exactly 32 bytes");
+        }
+
+        let mut key_array = [0u8; 32];
+        key_array.copy_from_slice(&key_bytes[..32]);
+        key_array
     }
     
 }

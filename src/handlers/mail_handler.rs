@@ -1,4 +1,4 @@
-use std::{collections::HashMap, fs};
+use std::{collections::HashMap};
 
 use actix_web::{post, get, web, HttpResponse, Responder, Scope};
 use handlebars::Handlebars;
@@ -46,8 +46,9 @@ async fn preview_email_to() -> impl Responder {
     let mut handlebars = Handlebars::new();
 
     // Baca file mustache-nya
-    let template_str = fs::read_to_string("templates/mail_to.mustache")
-        .expect("Gagal baca template");
+    // let template_str = fs::read_to_string("./templates/mail_to.mustache")
+    //     .expect("Gagal baca template");
+    let template_str = include_str!("../../templates/mail_to.mustache");
 
     handlebars
         .register_template_string("mail_to", template_str)
@@ -73,8 +74,7 @@ async fn preview_email_from() -> impl Responder {
     let mut handlebars = Handlebars::new();
 
     // Baca file mustache-nya
-    let template_str = fs::read_to_string("templates/mail_from.mustache")
-        .expect("Gagal baca template");
+    let template_str = include_str!("../../templates/mail_from.mustache");
 
     handlebars
         .register_template_string("mail_from", template_str)

@@ -1,4 +1,4 @@
-use std::{collections::HashMap, fs};
+use std::{collections::HashMap};
 
 use handlebars::Handlebars;
 use lettre::{transport::smtp::authentication::Credentials, Message, SmtpTransport, Transport};
@@ -16,8 +16,7 @@ impl MailService {
         let smtp_server = "smtp-relay.brevo.com";
 
         // Baca template
-        let template_str = fs::read_to_string("templates/mail_to.mustache")
-            .expect("Template mail.handlebars tidak bisa dibaca");
+        let template_str = include_str!("../../templates/mail_to.mustache");
 
         // Setup handlebars
         let mut handlebars = Handlebars::new();

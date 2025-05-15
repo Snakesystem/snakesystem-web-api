@@ -4,6 +4,7 @@ use contexts::connection::{create_pool, DbPool};
 use handlers::{auth_handler::auth_scope, mail_handler::mail_scope, generic_handler::generic_scope};
 use services::generic_service::GenericService;
 use shuttle_actix_web::ShuttleActixWeb;
+use shuttle_runtime::SecretStore;
 use utils::api_doc::{health_check, ApiDoc};
 use utoipa::OpenApi;
 use utoipa_swagger_ui::SwaggerUi;
@@ -33,8 +34,14 @@ mod utils {
 }
 
 #[shuttle_runtime::main]
-async fn main() -> ShuttleActixWeb<impl FnOnce(&mut ServiceConfig) + Send + Clone + 'static> {
-    let db_pool: DbPool = create_pool("db12877").await.unwrap();
+async fn main(#[shuttle_runtime::Secrets] secrets: SecretStore) -> ShuttleActixWeb<impl FnOnce(&mut ServiceConfig) + Send + Clone + 'static> {
+    dotenvy::dotenv().ok();
+
+    let db_server = secrets.get("DATABASE_SERVER").expect("secret was not found");
+    let db_user = secrets.get("DATABASE_USER").expect("secret was not found");
+    let db_password = secrets.get("DATABASE_PASSWORD").expect("secret was not found");
+
+    let db_pool: DbPool = create_pool(db_server.as_str(), db_user.as_str(), db_password.as_str(), "db12877").await.unwrap();
 
     let config = move |cfg: &mut ServiceConfig| {
         let cors = Cors::default()

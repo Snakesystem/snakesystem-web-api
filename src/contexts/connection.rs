@@ -45,11 +45,11 @@ impl<'a> Drop for Transaction<'a> {
 }
 
 /// Membuat pool koneksi database
-pub async fn create_pool(database: &str) -> Result<DbPool, Box<dyn std::error::Error + Send + Sync>> {
+pub async fn create_pool(db_server: &str, db_user: &str, db_password: &str, database: &str) -> Result<DbPool, Box<dyn std::error::Error + Send + Sync>> {
 
     let connection_string = format!(
-        "Server=tcp:db12877.public.databaseasp.net;User=db12877;Password=Snakesystem@09;TrustServerCertificate=true;Database={}",
-        database
+        "Server={};User={};Password={};TrustServerCertificate=true;Database={}",
+        db_server, db_user, db_password, database
     );
 
     let config: Config = Config::from_ado_string(&connection_string)?;
