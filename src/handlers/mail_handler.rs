@@ -1,10 +1,13 @@
 use std::{collections::HashMap};
 
-use actix_web::{post, get, web, HttpResponse, Responder, Scope};
+use actix_web::{get, post, web, HttpRequest, HttpResponse, Responder, Scope};
+use bb8::Pool;
+use bb8_tiberius::ConnectionManager;
 use handlebars::Handlebars;
 use lettre::{transport::smtp::authentication::Credentials, Message, SmtpTransport, Transport as _};
+use serde_json::json;
 
-use crate::{contexts::model::{ContactRequest, EmailRequest}, services::mail_service::MailService};
+use crate::{contexts::model::{ActionResult, ContactRequest, EmailRequest}, services::mail_service::MailService};
 
 pub fn mail_scope() -> Scope {
     
@@ -16,29 +19,37 @@ pub fn mail_scope() -> Scope {
 }
 
 #[post("/contact")]
-async fn contact_form(form: web::Json<EmailRequest>) -> impl Responder {
+async fn contact_form(req: HttpRequest, connection: web::Data<Pool<ConnectionManager>>, form: web::Json<EmailRequest>) -> impl Responder {
     let mut sender: EmailRequest = form.clone().into();
-    let mut receiver = form.into_inner();
-    
-    let mut result = MailService::send_email({
-        sender.recipient = String::from("feryirawansyah09@gmail.com");
-        sender
-    });
+    let mut receiver: EmailRequest = form.clone().into();
 
+    let mut result: ActionResult<(), String> = MailService::contact_form(req, connection, form.into_inner()).await;
+    
     if result.result {
-        result = MailService::send_email({
-            receiver.message = String::from("Terima kasih telah menghubungi kami. Kami akan segera menghubungi anda.");
-            receiver
+        let email_sender = MailService::send_email({
+            sender.recipient = String::from("feryirawansyah09@gmail.com");
+            sender
         });
-        if result.result {
-            HttpResponse::Ok().json(result)
-        } else {
-            HttpResponse::InternalServerError().json(result)
+
+        if email_sender.result {
+            let email_receiver = MailService::send_email({
+                receiver.message = String::from("Terima kasih telah menghubungi kami. Kami akan segera menghubungi anda.");
+                receiver
+            });
+            if email_receiver.result {
+                result.result = true;
+                result.message = String::from("Email berhasil dikirim.");
+            }
         }
-            
     } else {
-        HttpResponse::InternalServerError().json(result)
+        return HttpResponse::InternalServerError().json(json!({
+            "result": result.result,
+            "message": result.message,
+            "error": result.error
+        }));
     }
+
+    HttpResponse::Ok().json(result)
 }
 
 #[get("/preview-email-to")]

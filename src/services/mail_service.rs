@@ -1,9 +1,15 @@
 use std::{collections::HashMap};
-
+use actix_web::{web, HttpRequest};
+use bb8::Pool;
+use bb8_tiberius::ConnectionManager;
+use chrono::{NaiveDateTime, Utc};
 use handlebars::Handlebars;
 use lettre::{transport::smtp::authentication::Credentials, Message, SmtpTransport, Transport};
+use tiberius::QueryStream;
 
-use crate::contexts::model::{ActionResult, EmailRequest};
+use crate::contexts::{connection::Transaction, model::{ActionResult, EmailRequest}};
+
+use super::generic_service::GenericService;
 
 pub struct MailService;
 
@@ -60,5 +66,159 @@ impl MailService {
         }
 
         result
+    }
+
+    pub async  fn contact_form(req: HttpRequest, connection: web::Data<Pool<ConnectionManager>>, request: EmailRequest) -> ActionResult<(), String> {
+
+        let mut result: ActionResult<(), String> = ActionResult::default();
+
+        match connection.clone().get().await {
+            Ok(mut conn) => {
+                let query_result: Result<QueryStream, _> = conn.query(
+                    r#"SELECT Name, Receiver, Subject, Message, SentCount, IsEnabled, IPAddress, LastUpdate 
+                    FROM EmailHistory 
+                    WHERE Receiver = @P1"#, &[&request.recipient]).await;
+                match query_result {
+                    Ok(rows) => {
+                        if let Ok(Some(row)) = rows.into_row().await {
+                            match Transaction::begin(&connection).await {
+                                Ok(trans) => {
+                                    let sent_count: i32 = row.get("SentCount").unwrap_or(0);
+                                    let isenabled: bool = row.get::<bool, _>("IsEnabled").unwrap_or(false);
+                                    let last_update: NaiveDateTime = row.get::<NaiveDateTime, _>("LastUpdate").unwrap_or(Utc::now().naive_utc());
+                                    let updated_count: i32 = sent_count + 1;
+                                    let enabled: bool = updated_count != 2;
+
+                                    if sent_count < 2 && isenabled {
+                                        match trans.conn.lock().await.as_mut() {
+                                            Some(conn) => {
+                                                
+                                                if let Err(err) = conn.execute(
+                                                    r#"UPDATE [dbo].[EmailHistory]
+                                                        set [SentCount] = @P2, [Subject] = @P3, [Message] = @P4, [IPAddress] = @P5, [IsEnabled] = @P6, [LastUpdate] = @P7
+                                                        WHERE Receiver = @P1"#,
+                                                    &[
+                                                        &request.recipient, 
+                                                        &updated_count, 
+                                                        &request.subject, 
+                                                        &request.message, &GenericService::get_ip_address(&req),
+                                                        &enabled,
+                                                        &Utc::now().naive_utc()
+                                                    ],
+                                                ).await {
+                                                    result.error = Some(format!("Fauled: {:?}", err));
+                                                    return result;
+                                                }
+                                            }
+                                            None => {
+                                                result.error = Some("Failed to get database connection".into());
+                                                return result;
+                                            }
+                                        }
+                                    } else if Utc::now().naive_utc().signed_duration_since(last_update) > chrono::Duration::hours(24) {
+                                        match trans.conn.lock().await.as_mut() {
+                                            Some(conn) => {
+                                                if let Err(err) = conn.execute(
+                                                    r#"UPDATE [dbo].[EmailHistory]
+                                                        set [SentCount] = @P2, [Subject] = @P3, [Message] = @P4, [IPAddress] = @P5, [IsEnabled] = @P6, [LastUpdate] = @P7
+                                                        WHERE Receiver = @P1"#,
+                                                    &[
+                                                        &request.recipient, 
+                                                        &1, 
+                                                        &request.subject, 
+                                                        &request.message, &GenericService::get_ip_address(&req),
+                                                        &true,
+                                                        &Utc::now().naive_utc()
+                                                    ],
+                                                ).await {
+                                                    result.error = Some(format!("Fauled: {:?}", err));
+                                                    return result;
+                                                }
+                                            }
+                                            None => {
+                                                result.error = Some("Failed to get database connection".into());
+                                                return result;
+                                            }
+                                        }
+                                    } else {
+                                        result.error = Some("You are only allowed to send 2 emails a day".into());
+                                        result.message = "Send limit exceeded".to_string();
+                                        return result;
+                                    }
+                                    // 🔵 Commit transaksi
+                                    if let Err(err) = trans.commit().await {
+                                        result.error = Some(format!("Failed to commit transaction: {:?}", err));
+                                        return result;
+                                    }
+                    
+                                    result.result = true;
+                                    result.message = "Change password successfully".to_string();
+                                }
+                                Err(err) => {
+                                    result.error = Some(format!("Failed to start transaction: {:?}", err));
+                                }
+                            }
+                    
+                        } else {
+                            match Transaction::begin(&connection).await {
+                                Ok(trans) => {
+                                    // 🔴 Scope ketiga: Insert ke TableRequest
+                                    match trans.conn.lock().await.as_mut() {
+                                            Some(conn) => {
+                                                if let Err(err) = conn.execute(
+                                                    r#"INSERT INTO [dbo].[EmailHistory] 
+                                                    ([Name], [Receiver], [Subject], [Message], [SentCount], [IsEnabled], [IPAddress]) 
+                                                    VALUES (@P1, @P2, @P3, @P4, @P5, @P6, @P7)"#,
+                                                    &[
+                                                        &request.name, 
+                                                        &request.recipient, 
+                                                        &request.subject, 
+                                                        &request.message, 
+                                                        &1, 
+                                                        &false, 
+                                                        &GenericService::get_ip_address(&req)
+                                                    ],
+                                                ).await {
+                                                    result.error = Some(format!("Fauled: {:?}", err));
+                                                    return result;
+                                                }
+                                            }
+                                            None => {
+                                                result.error = Some("Failed to get database connection".into());
+                                                return result;
+                                            }
+                                        }
+                    
+                                    // 🔵 Commit transaksi
+                                    if let Err(err) = trans.commit().await {
+                                        result.error = Some(format!("Failed to commit transaction: {:?}", err));
+                                        return result;
+                                    }
+                    
+                                    result.result = true;
+                                    result.message = "Change password successfully".to_string();
+                                }
+                                Err(err) => {
+                                    result.error = Some(format!("Failed to start transaction: {:?}", err));
+                                }
+                            }
+                            result.message = format!("No user found for email");
+                            return result;
+                        }
+                    },
+                    Err(err) => {
+                        result.error = format!("Query execution failed: {:?}", err).into();
+                        return result;
+                    },
+                }
+            },
+            Err(err) => {
+                result.error = format!("Internal Server error: {:?}", err).into();
+                return result;
+            }, 
+        }
+
+        return result;
+        
     }
 }
