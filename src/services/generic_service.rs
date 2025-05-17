@@ -141,5 +141,25 @@ impl GenericService {
         key_array.copy_from_slice(&key_bytes[..32]);
         key_array
     }
+
+    pub fn slugify(title: &str) -> String {
+        title
+            .to_lowercase()
+            .chars()
+            .map(|c| {
+                if c.is_alphanumeric() {
+                    c
+                } else if c.is_whitespace() || c == '-' {
+                    '-'
+                } else {
+                    '\0' // dibuang nanti
+                }
+            })
+            .collect::<String>()
+            .split('-') // hilangkan extra dash
+            .filter(|s| !s.is_empty())
+            .collect::<Vec<_>>()
+            .join("-")
+    }
     
 }

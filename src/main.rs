@@ -1,7 +1,7 @@
 use actix_cors::Cors;
 use actix_web::{http, web::{self, route, ServiceConfig}};
 use contexts::connection::{create_pool, DbPool};
-use handlers::{auth_handler::auth_scope, mail_handler::mail_scope, generic_handler::generic_scope};
+use handlers::{auth_handler::auth_scope, generic_handler::generic_scope, library_handler::library_scope, mail_handler::mail_scope};
 use services::generic_service::GenericService;
 use shuttle_actix_web::ShuttleActixWeb;
 use shuttle_runtime::SecretStore;
@@ -20,12 +20,15 @@ mod services {
     pub mod generic_service;
     pub mod auth_service;
     pub mod mail_service;
+    pub mod library_service;
+    pub mod data_service;
 }
 
 mod handlers {
     pub mod generic_handler;
     pub mod auth_handler;
     pub mod mail_handler;
+    pub mod library_handler;
 }
 
 mod utils {
@@ -61,6 +64,7 @@ async fn main(#[shuttle_runtime::Secrets] secrets: SecretStore) -> ShuttleActixW
             .service(generic_scope())
             .service(auth_scope())
             .service(mail_scope())
+            .service(library_scope())
         )
         .service(
             SwaggerUi::new("/docs/{_:.*}")

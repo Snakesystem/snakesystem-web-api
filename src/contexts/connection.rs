@@ -29,17 +29,63 @@ impl<'a> Transaction<'a> {
         self.committed = true;
         Ok(())
     }
+
+    pub async fn rollback(mut self) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
+        let mut conn_guard = self.conn.lock().await;
+        if let Some(mut conn) = conn_guard.take() {
+            conn.simple_query("ROLLBACK").await?;
+        }
+        self.committed = false;
+        Ok(())
+    }
+
+    pub async fn begin_transaction<T, F, Fut>(
+        pool: &Pool<ConnectionManager>,
+        f: F,
+    ) -> Result<T, Box<dyn std::error::Error + Send + Sync>>
+    where
+        F: FnOnce(&mut PooledConnection<ConnectionManager>) -> Fut + Send + 'static,
+        Fut: std::future::Future<Output = Result<T, Box<dyn std::error::Error + Send + Sync>>> + Send + 'static,
+        T: Send + 'static,
+    {
+        let mut conn = pool.get().await?;
+        conn.simple_query("BEGIN").await?;
+
+        let result = f(&mut conn).await;
+
+        match result {
+            Ok(val) => {
+                conn.simple_query("COMMIT").await?;
+                Ok(val)
+            }
+            Err(e) => {
+                let _ = conn.simple_query("ROLLBACK").await;
+                Err(e)
+            }
+        }
+    }
+
 }
 
+// impl<'a> Drop for Transaction<'a> {
+//     fn drop(&mut self) {
+//         // Kalau belum commit, rollback (sync!)
+//         if !self.committed {
+//             // WARNING: ini blocking dan sync, jadi gak cocok untuk async
+//             let conn = self.conn.blocking_lock().take();
+//             if let Some(mut conn) = conn {
+//                 // rollback sync — pakai try block biar gak panik
+//                 println!("Rollback transaction");
+//                 let _ = conn.simple_query("ROLLBACK");
+//             }
+//         }
+//     }
+// }
 impl<'a> Drop for Transaction<'a> {
     fn drop(&mut self) {
         if !self.committed {
-            if let Ok(mut conn_guard) = self.conn.try_lock() {
-                if let Some(mut conn) = conn_guard.take() {
-                    // Eksekusi rollback langsung tanpa async
-                    let _ = conn.simple_query("ROLLBACK");
-                }
-            }
+            // gak bisa `.await` di Drop, jadi lebih aman kalau commit manual
+            eprintln!("Transaction dropped without commit, should rollback.");
         }
     }
 }

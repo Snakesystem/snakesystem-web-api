@@ -125,3 +125,25 @@ pub struct EmailRequest {
     #[validate(custom(function = "required"))]
     pub message: String,
 }
+
+// Region Library
+#[derive(Debug, Deserialize, Serialize, ToSchema, Clone, Validate)]
+pub struct NewNoteRequest {
+    #[validate(custom(function = "required"))]
+    pub category: String,
+    #[validate(custom(function = "required"))]
+    pub title: String,
+    pub slug: Option<String>,
+    #[validate(custom(function = "required"))]
+    pub content_md: String,
+}
+
+#[derive(Debug, Deserialize, Serialize, ToSchema, Clone)]
+pub struct Notes {
+    pub category: String,
+    pub title: String,
+    pub slug: String,
+    pub content_md: String,
+    pub ip_address: String,
+    pub last_update: chrono::NaiveDateTime,
+}
