@@ -54,26 +54,46 @@
       width: 24px;
       margin: 0 8px;
     }
+
+    .email-content .button-container {
+      display: flex;
+      flex-direction: column;
+      justify-content: center;
+      margin-top: 10px;
+      padding: 0 10px;
+    }
+
+    .email-content .button-container .activation-link {
+      display: inline-block;
+      background: linear-gradient(45deg, #00acc1, #26c6da);
+      color: white;
+      padding: 10px 20px;
+      border-radius: 5px;
+      text-decoration: none;
+      margin-top: 10px;
+    }
   </style>
 </head>
 <body>
   <div class="email-wrapper">
     <div class="email-header">
-      <h1>Hi, {{name}}👋</h1>
-      <h2>Pesan anda telah diterima</h2>
+      <h1>Ada pesan dari, {{name}}</h1>
+      <h2>Permintaan untuk {{subject}}</h2>
     </div>
     <div class="email-content">
-      <h3>{{title}}</h3>
-      <img class="big-icon" src="https://cdn-icons-png.flaticon.com/512/561/561127.png" alt="Success Icon" />
+      <p>Ada email dari {{receipient}} dengan subjek <strong>{{subject}}</strong>. Terima kasih!</p>
+      <div class="icon-content">
+        <img class="big-icon" src="https://snakesystem.github.io/svg/email_send.svg?v=12345" alt="FB" />
+      </div>
       <p>{{message}}</p>
     </div>
     <div class="email-footer">
       <p>© 2025 Tech Snake System, Indonesia</p>
       <div class="social-icons">
-        <a href="#" target="_blank"><img src="https://cdn-icons-png.flaticon.com/512/733/733547.png" alt="FB" /></a>
-        <a href="#" target="_blank"><img src="https://cdn-icons-png.flaticon.com/512/733/733561.png" alt="Linkedin" /></a>
-        <a href="#" target="_blank"><img src="https://cdn-icons-png.flaticon.com/512/733/733558.png" alt="Twitter" /></a>
-        <a href="https://snakesystem.github.io" target="_blank"><img src="https://snakesystem.github.io/favicon.ico" alt="snake" /></a>
+        <a href="#" target="_blank"><img src="https://cdn-icons-png.flaticon.com/512/733/733547.png?v=12345" alt="FB" /></a>
+        <a href="#" target="_blank"><img src="https://cdn-icons-png.flaticon.com/512/733/733561.png?v=12345" alt="Linkedin" /></a>
+        <a href="#" target="_blank"><img src="https://cdn-icons-png.flaticon.com/512/733/733558.png?v=12345" alt="Twitter" /></a>
+        <a href="https://snakesystem.github.io" target="_blank"><img src="https://snakesystem.github.io/favicon.ico?v=12345" alt="snake" /></a>
       </div>
     </div>
   </div>

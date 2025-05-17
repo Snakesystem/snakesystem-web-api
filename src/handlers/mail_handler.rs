@@ -6,6 +6,7 @@ use bb8_tiberius::ConnectionManager;
 use handlebars::Handlebars;
 use lettre::{transport::smtp::authentication::Credentials, Message, SmtpTransport, Transport as _};
 use serde_json::json;
+use validator::Validate;
 
 use crate::{contexts::model::{ActionResult, ContactRequest, EmailRequest}, services::mail_service::MailService};
 
@@ -20,26 +21,43 @@ pub fn mail_scope() -> Scope {
 
 #[post("/contact")]
 async fn contact_form(req: HttpRequest, connection: web::Data<Pool<ConnectionManager>>, form: web::Json<EmailRequest>) -> impl Responder {
+
+    if let Err(err) = form.validate() {
+        return HttpResponse::BadRequest().json(json!({
+            "result": false,
+            "message": "Form tidak valid",
+            "error": err
+        }));
+    }
+
     let mut sender: EmailRequest = form.clone().into();
     let mut receiver: EmailRequest = form.clone().into();
 
     let mut result: ActionResult<(), String> = MailService::contact_form(req, connection, form.into_inner()).await;
     
     if result.result {
-        let email_sender = MailService::send_email({
+        let email_sender = MailService::send_email_from({
             sender.recipient = String::from("feryirawansyah09@gmail.com");
             sender
-        });
+        }).await;
 
         if email_sender.result {
-            let email_receiver = MailService::send_email({
+            let email_receiver = MailService::send_email_to({
                 receiver.message = String::from("Terima kasih telah menghubungi kami. Kami akan segera menghubungi anda.");
                 receiver
-            });
+            }).await;
             if email_receiver.result {
                 result.result = true;
                 result.message = String::from("Email berhasil dikirim.");
+            } else {
+                result.result = false;
+                result.message = String::from("Email gagal dikirim.");
+                result.error = Some(email_receiver.message);
             }
+        } else {
+            result.result = false;
+            result.message = String::from("Email gagal dikirim.");
+            result.error = Some(email_sender.message);
         }
     } else {
         return HttpResponse::InternalServerError().json(json!({
@@ -60,6 +78,31 @@ async fn preview_email_to() -> impl Responder {
     // let template_str = fs::read_to_string("./templates/mail_to.mustache")
     //     .expect("Gagal baca template");
     let template_str = include_str!("../../templates/mail_to.mustache");
+
+    let res_svg = reqwest::get("https://snakesystem.github.io/svg/email_send.svg").await.unwrap();
+    if res_svg.status().is_success() {
+        println!("Succes load image");
+    }
+
+    let res_fb = reqwest::get("https://cdn-icons-png.flaticon.com/512/733/733547.png").await.unwrap();
+    if res_fb.status().is_success() {
+        println!("Succes load image");
+    }
+
+    let res_linkedin = reqwest::get("https://cdn-icons-png.flaticon.com/512/733/733561.png").await.unwrap();
+    if res_linkedin.status().is_success() {
+        println!("Succes load image");
+    }
+
+    let res_ig = reqwest::get("https://cdn-icons-png.flaticon.com/512/733/733558.png").await.unwrap();
+    if res_ig.status().is_success() {
+        println!("Succes load image");
+    }
+
+    let res_ss = reqwest::get("https://snakesystem.github.io/favicon.ico").await.unwrap();
+    if res_ss.status().is_success() {
+        println!("Succes load image");
+    }
 
     handlebars
         .register_template_string("mail_to", template_str)

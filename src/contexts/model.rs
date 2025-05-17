@@ -114,10 +114,14 @@ pub struct ContactRequest {
     pub message: String,
 }
 
-#[derive(Debug, Deserialize,Serialize, ToSchema, Clone)]
+#[derive(Debug, Deserialize,Serialize, ToSchema, Clone, Validate)]
 pub struct EmailRequest {
+    #[validate(custom(function = "required"))]
     pub name: String,
+    #[validate(custom(function = "required"))]
     pub subject: String,
+    #[validate(custom(function = "required"))]
     pub recipient: String,
+    #[validate(custom(function = "required"))]
     pub message: String,
 }
