@@ -1,9 +1,9 @@
 use actix_web::{web, HttpRequest};
 use bb8::Pool;
 use bb8_tiberius::ConnectionManager;
-use chrono::Utc;
+use chrono::{NaiveDateTime, Utc};
 
-use crate::contexts::{connection::Transaction, model::{ActionResult, NewNoteRequest}};
+use crate::contexts::{connection::Transaction, model::{ActionResult, NewNoteRequest, Notes}};
 
 use super::{data_service::DataService, generic_service::GenericService};
 
@@ -82,6 +82,41 @@ impl LibraryService {
                 result.result = true;
                 result.message = "Retrieved data successfully".to_string();
                 result.data = Some(data);
+            }
+            Err(err) => {
+                result.message = "Internal server error".to_string();
+                result.error = Some(format!("Query error: {}", err));
+            }
+        }
+
+        return result;
+    }
+
+    pub async fn get_library(connection: web::Data<Pool<ConnectionManager>>, slug: String) -> ActionResult<Notes, String> {
+        let mut result: ActionResult<Notes, String> = ActionResult::default();
+        let mut conn = connection.get().await.unwrap();
+
+        match conn.query(r#"SELECT * FROM Notes WHERE Slug = @P1"#, &[&slug]).await {
+            Ok(rows) => {
+                if let Ok(Some(row)) = rows.into_row().await {
+                    result.result = true;
+                    result.message = format!("Retrieve successfully");
+                    result.data = Some(Notes {
+                        note_id: row.get::<i32, _>("NotesNID").unwrap_or(0),
+                        last_update: row
+                            .get::<NaiveDateTime, _>("LastUpdate")
+                            .map(|dt| dt.and_utc()) // 🔥 Konversi ke DateTime<Utc>
+                            .unwrap_or_else(|| chrono::TimeZone::timestamp_opt(&Utc, 0, 0).unwrap()), 
+                        title: row.get::<&str, _>("Title").map_or_else(|| "".to_string(), |s| s.to_string()),
+                        slug: row.get::<&str, _>("Slug").map_or_else(|| "".to_string(), |s| s.to_string()),
+                        content_md: row.get::<&str, _>("Content_MD").map_or_else(|| "".to_string(), |s| s.to_string()),
+                        ip_address: row.get::<&str, _>("IPAddress").map_or_else(|| "".to_string(), |s| s.to_string()),
+                        category: row.get::<&str, _>("NotesCategory").map_or_else(|| "".to_string(), |s| s.to_string()),
+                    }); 
+                }
+                else {
+                    result.message = "Data not found".to_string();
+                }
             }
             Err(err) => {
                 result.message = "Internal server error".to_string();

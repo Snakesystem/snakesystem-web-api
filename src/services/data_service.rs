@@ -12,8 +12,6 @@ impl DataService {
             let col_name = col.name();
             let column_type = &col.column_type();
 
-            // println!("Column Name: {}, Column Type: {:?}", col_name, column_type);
-
             match column_type {
                 ColumnType::NVarchar | ColumnType::BigVarChar | ColumnType::Text => {
                     if let Ok(Some(value)) = row.try_get::<&str, _>(i) {

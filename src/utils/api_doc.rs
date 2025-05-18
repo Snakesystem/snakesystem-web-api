@@ -1,7 +1,7 @@
 use actix_web::{HttpResponse, Responder, get};
 use utoipa::{OpenApi, ToSchema};
 
-use crate::contexts::{jwt_session::Claims, model::{ActionResult, ChangePasswordRequest, EmailRequest, LoginRequest, RegisterRequest, ResetPasswordRequest}};
+use crate::contexts::{jwt_session::Claims, model::{ActionResult, ChangePasswordRequest, EmailRequest, LoginRequest, NewNoteRequest, RegisterRequest, ResetPasswordRequest}};
 
 #[derive(serde::Serialize, ToSchema)]
 struct HealthCheckResponse {
@@ -34,7 +34,7 @@ struct HealthCheckResponse {
             "error": "Bad Request"
         }))
     ),
-    tag = "1. Auth"
+    tag = "1. Authentiacation"
 )]
 #[allow(dead_code)]
 pub fn login_doc() {}
@@ -65,7 +65,7 @@ pub fn login_doc() {}
             "error": "Bad Request"
         }))
     ),
-    tag = "1. Auth"
+    tag = "1. Authentiacation"
 )]
 #[allow(dead_code)]
 pub fn register_doc() {}
@@ -102,7 +102,7 @@ pub fn register_doc() {}
             "error": "Bad Request"
         }))
     ),
-    tag = "1. Auth"
+    tag = "1. Authentiacation"
 )]
 #[allow(dead_code)]
 pub fn check_session_doc() {}
@@ -112,7 +112,7 @@ pub fn check_session_doc() {}
     responses(
         (status = 200, description = "Logout Success", body = ActionResult<String, String>)
     ),
-    tag = "1. Auth"
+    tag = "1. Authentiacation"
 )]
 #[allow(dead_code)]
 pub fn logout_doc() {}
@@ -140,7 +140,7 @@ pub fn logout_doc() {}
             "error": "Internal Server Error"
         }))
     ),
-    tag = "1. Auth"
+    tag = "1. Authentiacation"
 )]
 #[allow(dead_code)]
 pub fn activation_user_doc() {}
@@ -166,7 +166,7 @@ pub fn activation_user_doc() {}
             "error": "Internal Server Error"
         }))
     ),
-    tag = "1. Auth"
+    tag = "1. Authentiacation"
 )]
 #[allow(dead_code)]
 pub fn reset_password_doc() {}
@@ -192,12 +192,12 @@ pub fn reset_password_doc() {}
             "error": "Internal Server Error"
         }))
     ),
-    tag = "1. Auth"
+    tag = "1. Authentiacation"
 )]
 #[allow(dead_code)]
 pub fn change_password_doc() {}
 
-// Forget password User Docs
+// Contact Form Docs
 #[utoipa::path(
     post,
     path = "/api/v1/email/contact",
@@ -222,6 +222,132 @@ pub fn change_password_doc() {}
 )]
 #[allow(dead_code)]
 pub fn contact_form_doc() {}
+
+// Create Library Docs
+#[utoipa::path(
+    post, 
+    path = "/api/v1/library/create", 
+    request_body = NewNoteRequest,
+    summary = "Cek sesi login pengguna",
+    description = "`Wajib login terlebih dahulu. Memerlukan token dari cookies` untuk mengecek sesi login pengguna",
+    responses(
+        (status = 200, description = "New notes created", body = ActionResult<Claims, String>, example = json!({
+            "result": true, 
+            "message": "New notes created"
+        })),
+        (status = 401, description = "Unauthorized", body = ActionResult<String, String>, example = json!({
+            "result": false, 
+            "message": "Unauthorized", 
+            "error": "Unauthorized"
+        })),
+        (status = 500, description = "Internal Server Error", body = ActionResult<String, String>, example = json!({
+            "result": false, 
+            "message": "User not found", 
+            "error": "Internal Server Error"
+        })),
+        (status = 400, description = "Bad Request", body = ActionResult<String, String>, example = json!({
+            "result": false, 
+            "message": "Token not found", 
+            "error": "Bad Request"
+        }))
+    ),
+    tag = "3. Library Endpoints"
+)]
+#[allow(dead_code)]
+pub fn create_library_doc() {}
+
+// Get Libraries Docs
+#[utoipa::path(
+    get,
+    path = "/api/v1/library/get/{category}",
+    params(
+        ("category" = String, Path, description = "Category of notes"),
+    ),
+    summary = "Cek sesi login pengguna",
+    description = "`Wajib login terlebih dahulu. Memerlukan token dari cookies` untuk mengecek sesi login pengguna",
+    responses(
+        (status = 200, description = "Get Libraries", body = ActionResult<Claims, String>, example = json!({
+            "result": true,
+            "message": "Retrieve libraries successfully",
+            "data": [
+                {
+                    "NotesNID": 1,
+                    "Title": "Library 1",
+                    "Slug": "library-1",
+                    "Category": "technology",
+                    "Content_MD": "https://raw.githubusercontent.com/Snakesystem/docs/refs/heads/main/mssql-with-rust/README.md"
+                },
+                {
+                    "NotesNID": 2,
+                    "Title": "Library 2",
+                    "Slug": "library-2",
+                    "Category": "database",
+                    "Content_MD": "https://raw.githubusercontent.com/Snakesystem/docs/refs/heads/main/postgres-with-rust/README.md"
+                }
+            ]
+        })),
+        (status = 401, description = "Unauthorized", body = ActionResult<String, String>, example = json!({
+            "result": false,
+            "message": "Unauthorized",
+            "error": "Unauthorized"
+        })),
+        (status = 500, description = "Internal Server Error", body = ActionResult<String, String>, example = json!({
+            "result": false,
+            "message": "Token has expired",
+            "error": "Internal Server Error"
+        })),
+        (status = 400, description = "Bad Request", body = ActionResult<String, String>, example = json!({
+            "result": false,
+            "message": "Token not found",
+            "error": "Bad Request"
+        }))
+    ),
+    tag = "3. Library Endpoints"
+)]
+#[allow(dead_code)]
+pub fn get_libraries_doc() {}
+
+// Get Single Docs
+#[utoipa::path(
+    get,
+    path = "/api/v1/library/get-single/{slug}",
+    params(
+        ("slug" = String, Path, description = "Slug of notes"),
+    ),
+    summary = "Cek sesi login pengguna",
+    description = "`Wajib login terlebih dahulu. Memerlukan token dari cookies` untuk mengecek sesi login pengguna",
+    responses(
+        (status = 200, description = "Get Single Library", body = ActionResult<Claims, String>, example = json!({
+            "result": true,
+            "message": "Retrieve library successfully",
+            "data": {
+                "NotesNID": 1,
+                "Title": "Library 1",
+                "Slug": "library-1",
+                "Category": "technology",
+                "Content_MD": "https://raw.githubusercontent.com/Snakesystem/docs/refs/heads/main/mssql-with-rust/README.md"
+            },
+        })),
+        (status = 401, description = "Unauthorized", body = ActionResult<String, String>, example = json!({
+            "result": false,
+            "message": "Unauthorized",
+            "error": "Unauthorized"
+        })),
+        (status = 500, description = "Internal Server Error", body = ActionResult<String, String>, example = json!({
+            "result": false,
+            "message": "Token has expired",
+            "error": "Internal Server Error"
+        })),
+        (status = 400, description = "Bad Request", body = ActionResult<String, String>, example = json!({
+            "result": false,
+            "message": "Token not found",
+            "error": "Bad Request"
+        }))
+    ),
+    tag = "3. Library Endpoints"
+)]
+#[allow(dead_code)]
+pub fn get_library_doc() {}
 
 // Health Check Docs
 #[utoipa::path(
@@ -256,15 +382,19 @@ pub async fn health_check() -> impl Responder {
         check_session_doc,
         logout_doc,
         activation_user_doc,
-        contact_form_doc
+        contact_form_doc,
+        create_library_doc,
+        get_libraries_doc,
+        get_library_doc
     ),
     components(
         schemas(ActionResult<Claims, String>)
     ),
     tags(
         (name = "0. Application Default Endpoints", description = "Default path application endpoints"),
-        (name = "1. Auth", description = "Authentication related endpoints"),
+        (name = "1. Authentiacation", description = "Authentication related endpoints"),
         (name = "2. Email Endpoints", description = "Mailer to send email related endpoints"),
+        (name = "3. Library Endpoints", description = "Library endpoints to manage library data for Snakesystem Library"),
     )
 )]
 

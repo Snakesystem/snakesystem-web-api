@@ -140,10 +140,12 @@ pub struct NewNoteRequest {
 
 #[derive(Debug, Deserialize, Serialize, ToSchema, Clone)]
 pub struct Notes {
+    pub note_id: i32,
     pub category: String,
     pub title: String,
     pub slug: String,
     pub content_md: String,
     pub ip_address: String,
-    pub last_update: chrono::NaiveDateTime,
+    #[serde(serialize_with = "serialize_datetime")]
+    pub last_update: chrono::DateTime<Utc>,
 }

@@ -3,7 +3,7 @@ use bb8::Pool;
 use bb8_tiberius::ConnectionManager;
 use validator::Validate;
 use crate::{
-    contexts::model::{ActionResult, NewNoteRequest}, 
+    contexts::model::{ActionResult, NewNoteRequest, Notes}, 
     services::{generic_service::GenericService, library_service::LibraryService}
 };
 
@@ -11,14 +11,11 @@ pub fn library_scope() -> Scope {
     web::scope("/library")
         .service(create_libary)
         .service(get_libraries)
+        .service(get_library)
 }
 
 #[post("/create")]
-async fn create_libary(
-    req: HttpRequest,
-    connection: web::Data<Pool<ConnectionManager>>,
-    request: web::Json<NewNoteRequest>,
-) -> impl Responder {
+async fn create_libary(req: HttpRequest, connection: web::Data<Pool<ConnectionManager>>, request: web::Json<NewNoteRequest>) -> impl Responder {
     if let Err(err) = request.validate() {
         return HttpResponse::BadRequest().json(serde_json::json!({
             "result": false,
@@ -51,6 +48,20 @@ async fn get_libraries(connection: web::Data<Pool<ConnectionManager>>, category:
     }
 
     let result: ActionResult<Vec<serde_json::Value>, String> = LibraryService::get_libraries(connection, category.into_inner()).await;
+    if !result.result {
+        return HttpResponse::InternalServerError().json(result);
+    }
+    HttpResponse::Ok().json(result)
+}
+
+#[get("/get-single/{category}")]
+async fn get_library(connection: web::Data<Pool<ConnectionManager>>, slug: web::Path<String>,) -> impl Responder {
+
+    if slug.is_empty() {
+        return HttpResponse::BadRequest().json(serde_json::json!({"result": false, "message": "Slug is empty"}));
+    }
+
+    let result: ActionResult<Notes, String> = LibraryService::get_library(connection, slug.into_inner()).await;
     if !result.result {
         return HttpResponse::InternalServerError().json(result);
     }
