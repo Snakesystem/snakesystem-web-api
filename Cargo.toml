@@ -30,13 +30,16 @@ jsonwebtoken = "9.3.1"
 actix-session = { version = "0.10.1", features = ["cookie-session"] }
 actix-cors = "0.7.1"
 lettre = { version = "0.11.15", features = ["smtp-transport", "builder"] }
-
-# DEPENDENCIES SWAGGER UI
-utoipa = { version = "5.3.1", features = ["actix_extras", "chrono"] }
-utoipa-swagger-ui = { version = "9.0.1", features = ["actix-web"] }
 dotenvy = "0.15.7"
 once_cell = "1.21.3"
 futures = "0.3.31"
 actix-web-actors = "4.3.1"
 actix = "0.13.5"
 lazy_static = "1.5.0"
+csv-async = "1.3.1"
+tokio-util = { version = "0.7", features = ["compat"] }
+actix-multipart = "0.7.2"
+
+# DEPENDENCIES SWAGGER UI
+utoipa = { version = "5.3.1", features = ["actix_extras", "chrono"] }
+utoipa-swagger-ui = { version = "9.0.1", features = ["actix-web"] }

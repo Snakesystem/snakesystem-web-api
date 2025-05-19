@@ -1,9 +1,9 @@
-use actix_web::{get, web, HttpRequest, HttpResponse, Responder, Scope};
+use actix_web::{get, post, web, HttpRequest, HttpResponse, Responder, Scope};
 use actix_web_actors::ws;
 use bb8::Pool;
 use bb8_tiberius::ConnectionManager;
 
-use crate::{contexts::{model::{ActionResult, Company}, socket::WsSession}, services::generic_service::GenericService};
+use crate::{contexts::{model::{ActionResult, Company, MyRow}, socket::WsSession}, services::generic_service::GenericService};
 
 pub fn generic_scope() -> Scope {
     web::scope("/generic")
@@ -32,4 +32,21 @@ pub async fn get_company(pool: web::Data<Pool<ConnectionManager>>) -> impl Respo
 #[get("/ws/")]
 pub async fn ws_route(req: HttpRequest, stream: web::Payload) -> actix_web::Result<HttpResponse> {
     ws::start(WsSession::new(), &req, stream)
+}
+
+#[post("/import")]
+pub async fn test_import_data(body: web::Json<Vec<MyRow>>) -> impl Responder {
+    // Langsung clone data biar tidak kena borrow
+    let rows = body.into_inner();
+
+    // Jalankan import async (tapi tidak blokir response)
+    tokio::spawn(async move {
+        GenericService::test_import_data(rows).await;
+    });
+
+    HttpResponse::Ok().json({
+        serde_json::json!({
+            "status": "import_started"
+        })
+    })
 }

@@ -467,16 +467,28 @@ pub async fn health_check() -> impl Responder {
 // Not Found Docs
 #[utoipa::path(get, path = "/random-url/test",
     responses(
-        (status = 404, description = "Internal Server Error", body = ActionResult<String, String>, example = json!({
+        (status = 404, description = "Not found", body = ActionResult<String, String>, example = json!({
             "result": false, 
             "message": "Not found", 
             "error": "Url '/random-url/test' not found. Please check the URL."
         }))
     ),
-    tag = "2. Generic Endpoints"
+    tag = "5. Generic Endpoints"
 )]
 #[allow(dead_code)]
 pub fn not_found_docs() {}
+
+// Not Found Docs
+#[utoipa::path(get, path = "/api/v1/generic/ws/",
+    responses(
+        (status = 200, description = "Web Socket Success", example = json!({
+            "message": "on progress", 
+        }))
+    ),
+    tag = "5. Generic Endpoints"
+)]
+#[allow(dead_code)]
+pub fn ws_route_docs() {}
 
 #[derive(OpenApi)]
 #[openapi(
@@ -511,6 +523,7 @@ pub fn not_found_docs() {}
         (name = "2. Email Endpoints", description = "Mailer to send email related endpoints"),
         (name = "3. Library Endpoints", description = "Library endpoints to manage library data for Snakesystem Library"),
         (name = "4. Data Endpoints", description = "Data endpoints to manage generic data"),
+        (name = "5. Generic Endpoints", description = "Generic endpoints to manage reusable url"),
     )
 )]
 

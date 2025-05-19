@@ -1,5 +1,3 @@
-use std::env;
-
 use actix_web::{error, web, HttpRequest, HttpResponse, Responder};
 use bb8::Pool;
 use bb8_tiberius::ConnectionManager;
@@ -7,7 +5,7 @@ use serde_json::json;
 use tiberius::QueryStream;
 use rand::{rng, Rng};
 
-use crate::contexts::model::{ActionResult, Company};
+use crate::contexts::{model::{ActionResult, Company, MyRow}, socket::send_ws_event};
 
 pub struct GenericService;
 
@@ -162,4 +160,44 @@ impl GenericService {
             .join("-")
     }
     
+    pub fn sanitize_filename(filename: &str) -> String {
+        filename
+            .chars()
+            .map(|c| {
+                if c.is_ascii_alphanumeric() || c == '.' || c == '_' || c == '-' {
+                    c
+                } else {
+                    '_'
+                }
+            })
+            .collect()
+    }
+
+    pub async fn test_import_data(rows: Vec<MyRow>) {
+        let total = rows.len();
+
+        for (i, row) in rows.iter().enumerate() {
+            // Simulasi pemrosesan data (misalnya simpan ke DB)
+            println!("Import row: {:?}", row);
+
+            // Kirim progress ke frontend
+            let progress = json!({
+                "current": i + 1,
+                "total": total,
+                "row": row.name, // contoh data tambahan
+            });
+
+            send_ws_event("import_progress", &progress);
+
+            // Simulasi delay kalau mau lihat progress-nya jelas
+            tokio::time::sleep(tokio::time::Duration::from_millis(200)).await;
+        }
+
+        // Kirim notifikasi selesai
+        send_ws_event("import_done", &json!({
+            "status": "done",
+            "imported": total
+        }));
+    }
+
 }
