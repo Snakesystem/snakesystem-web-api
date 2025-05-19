@@ -181,3 +181,10 @@ pub struct ResultList {
     pub total: i32,
     pub rows: Vec<serde_json::Value>, // Pastikan ini bisa dikonversi ke JSON
 }
+
+#[derive(Debug, Deserialize)]
+pub struct MyRow {
+    pub id: i32,
+    pub name: String,
+    // tambah field lain sesuai kebutuhan
+}

@@ -1,7 +1,7 @@
-use actix_web::{HttpResponse, Responder, get};
+use actix_web::{get, web, HttpResponse, Responder};
 use utoipa::{OpenApi, ToSchema};
 
-use crate::contexts::{jwt_session::Claims, model::{ActionResult, ChangePasswordRequest, EmailRequest, LoginRequest, NewNoteRequest, RegisterRequest, ResetPasswordRequest}};
+use crate::contexts::{jwt_session::Claims, model::{ActionResult, ChangePasswordRequest, EmailRequest, HeaderParams, LoginRequest, NewNoteRequest, RegisterRequest, ResetPasswordRequest, TableDataParams}};
 
 #[derive(serde::Serialize, ToSchema)]
 struct HealthCheckResponse {
@@ -171,7 +171,7 @@ pub fn activation_user_doc() {}
 #[allow(dead_code)]
 pub fn reset_password_doc() {}
 
-// Forget password User Docs
+// Change password User Docs
 #[utoipa::path(
     post,
     path = "/api/v1/auth/change-password",
@@ -349,6 +349,104 @@ pub fn get_libraries_doc() {}
 #[allow(dead_code)]
 pub fn get_library_doc() {}
 
+// Get header Docs
+#[utoipa::path(
+    get,
+    path = "/api/v1/data/header",
+    summary = "Get generic columns",
+    description = "`Wajib login terlebih dahulu. Memerlukan token dari cookies` untuk mengecek sesi login pengguna",
+    params(
+        HeaderParams
+    ),
+    responses(
+        (status = 200, description = "Check Session", body = ActionResult<Claims, String>, example = json!({
+            "result": true,
+            "message": "Data retrieved successfully",
+            "data": [
+                {
+                    "field": "DataNID",
+                    "filterControl": "input",
+                    "sortable": true,
+                    "title": "Data NID"
+                },
+                {
+                    "field": "DataName",
+                    "filterControl": "input",
+                    "sortable": true,
+                    "title": "Data Name"
+                },
+            ]
+        })),
+        (status = 401, description = "Unauthorized", body = ActionResult<String, String>, example = json!({
+            "result": false,
+            "message": "Unauthorized",
+            "error": "Unauthorized"
+        })),
+        (status = 500, description = "Internal Server Error", body = ActionResult<String, String>, example = json!({
+            "result": false,
+            "message": "Token has expired",
+            "error": "Internal Server Error"
+        })),
+        (status = 400, description = "Bad Request", body = ActionResult<String, String>, example = json!({
+            "result": false,
+            "message": "Token not found",
+            "error": "Bad Request"
+        }))
+    ),
+    tag = "4. Data Endpoints"
+)]
+#[allow(dead_code)]
+pub fn get_header_docs(_: web::Query<HeaderParams>) {}
+
+// Get Table Data Docs
+#[utoipa::path(
+    get,
+    path = "/api/v1/data/get-table",
+    summary = "Get generic columns",
+    description = "`Wajib get header terlebih dahulu.` untuk mengecek header columns",
+    params(
+        TableDataParams
+    ),
+    responses(
+        (status = 200, description = "Data retrieved successfully", example = json!({
+            "totalNotFiltered": 222,
+            "total": 222,
+            "rows": [
+                {
+                "DataNID": 1,
+                "DataID": "DATA-123",
+                "DataName": "Jasa Keuangan Pasar Senggol",
+                "DataDescription": "Jasa Keuangan Pasar Senggol",
+                "LastUpdate": "2021-01-01"
+                },
+                {
+                "DataNID": 2,
+                "DataID": "DATA-124",
+                "DataName": "Jasa Keuangan Pasar Kecil",
+                "DataDescription": "Jasa Keuangan Pasar Kecil",
+                "LastUpdate": "2021-01-01"
+                },
+                {
+                "DataNID": 3,
+                "DataID": "DATA-125",
+                "DataName": "Jasa Keuangan Pasar Besar",
+                "DataDescription": "Jasa Keuangan Pasar Besar",
+                "LastUpdate": "2021-01-01"
+                }
+            ]
+    
+        })),
+        (status = 500, description = "Internal Server Error", example = json!({
+            "error": "Token error: 'Invalid column name 'AutoNID'.' on server S3 executing  on line 1 (code: 207, state: 1, class: 16)"
+        })),
+    ),
+    tag = "4. Data Endpoints"
+)]
+#[allow(dead_code)]
+pub fn get_table_data_docs(params: web::Query<TableDataParams>) {
+    params.into_inner();
+}
+
 // Health Check Docs
 #[utoipa::path(
     get,
@@ -365,6 +463,20 @@ pub async fn health_check() -> impl Responder {
         message: "Welcome to the snakesystem app!".to_string(),
     })
 }
+
+// Not Found Docs
+#[utoipa::path(get, path = "/random-url/test",
+    responses(
+        (status = 404, description = "Internal Server Error", body = ActionResult<String, String>, example = json!({
+            "result": false, 
+            "message": "Not found", 
+            "error": "Url '/random-url/test' not found. Please check the URL."
+        }))
+    ),
+    tag = "2. Generic Endpoints"
+)]
+#[allow(dead_code)]
+pub fn not_found_docs() {}
 
 #[derive(OpenApi)]
 #[openapi(
@@ -385,7 +497,10 @@ pub async fn health_check() -> impl Responder {
         contact_form_doc,
         create_library_doc,
         get_libraries_doc,
-        get_library_doc
+        get_library_doc,
+        not_found_docs,
+        get_header_docs,
+        get_table_data_docs
     ),
     components(
         schemas(ActionResult<Claims, String>)
@@ -395,6 +510,7 @@ pub async fn health_check() -> impl Responder {
         (name = "1. Authentiacation", description = "Authentication related endpoints"),
         (name = "2. Email Endpoints", description = "Mailer to send email related endpoints"),
         (name = "3. Library Endpoints", description = "Library endpoints to manage library data for Snakesystem Library"),
+        (name = "4. Data Endpoints", description = "Data endpoints to manage generic data"),
     )
 )]
 

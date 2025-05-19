@@ -14,6 +14,7 @@ mod contexts {
     pub mod model;
     pub mod crypto;
     pub mod jwt_session;
+    pub mod socket;
 }
 
 mod services {

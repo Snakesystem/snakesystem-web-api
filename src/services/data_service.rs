@@ -7,7 +7,7 @@ use chrono::{NaiveDate, NaiveDateTime};
 use serde_json::{json, Value};
 use tiberius::{numeric::Numeric, ColumnType, Row};
 
-use crate::contexts::model::{ActionResult, QueryClass, ResultList, TableDataParams};
+use crate::contexts::{model::{ActionResult, MyRow, QueryClass, ResultList, TableDataParams}, socket::send_ws_event};
 
 pub struct DataService;
 
@@ -278,5 +278,32 @@ impl DataService {
         }
     
         fquery
+    }
+
+    pub async fn import_data(rows: Vec<MyRow>) {
+        let total = rows.len();
+
+        for (i, row) in rows.iter().enumerate() {
+            // Simulasi pemrosesan data (misalnya simpan ke DB)
+            println!("Import row: {:?}", row);
+
+            // Kirim progress ke frontend
+            let progress = json!({
+                "current": i + 1,
+                "total": total,
+                "row": row.name, // contoh data tambahan
+            });
+
+            send_ws_event("import_progress", &progress);
+
+            // Simulasi delay kalau mau lihat progress-nya jelas
+            tokio::time::sleep(tokio::time::Duration::from_millis(200)).await;
+        }
+
+        // Kirim notifikasi selesai
+        send_ws_event("import_done", &json!({
+            "status": "done",
+            "imported": total
+        }));
     }
 }

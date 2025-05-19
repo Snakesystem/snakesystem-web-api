@@ -1,14 +1,15 @@
-use actix_web::{web, Responder, Scope, get, HttpResponse};
+use actix_web::{get, post, web, HttpResponse, Responder, Scope};
 use bb8::Pool;
 use bb8_tiberius::ConnectionManager;
 use serde_json::json;
 
-use crate::{contexts::model::{ActionResult, HeaderParams, ResultList, TableDataParams}, services::data_service::DataService};
+use crate::{contexts::model::{ActionResult, HeaderParams, MyRow, ResultList, TableDataParams}, services::data_service::DataService};
 
 pub fn data_scope() -> Scope {
     web::scope("/data")
         .service(get_header)
         .service(get_table_data)
+        .service(import_endpoint)
 }
 
 #[get("/header")]
@@ -45,4 +46,21 @@ async fn get_table_data(params: web::Query<TableDataParams>, pool: web::Data<Poo
         },
         
     }
+}
+
+#[post("/import")]
+pub async fn import_endpoint(body: web::Json<Vec<MyRow>>) -> impl Responder {
+    // Langsung clone data biar tidak kena borrow
+    let rows = body.into_inner();
+
+    // Jalankan import async (tapi tidak blokir response)
+    tokio::spawn(async move {
+        DataService::import_data(rows).await;
+    });
+
+    HttpResponse::Ok().json({
+        serde_json::json!({
+            "status": "import_started"
+        })
+    })
 }

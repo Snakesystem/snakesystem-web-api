@@ -1,12 +1,14 @@
-use actix_web::{get, web, HttpResponse, Responder, Scope};
+use actix_web::{get, web, HttpRequest, HttpResponse, Responder, Scope};
+use actix_web_actors::ws;
 use bb8::Pool;
 use bb8_tiberius::ConnectionManager;
 
-use crate::{contexts::model::{ActionResult, Company}, services::generic_service::GenericService};
+use crate::{contexts::{model::{ActionResult, Company}, socket::WsSession}, services::generic_service::GenericService};
 
 pub fn generic_scope() -> Scope {
     web::scope("/generic")
         .service(get_company)
+        .service(ws_route)
 }
 
 #[get("/company")]
@@ -25,4 +27,9 @@ pub async fn get_company(pool: web::Data<Pool<ConnectionManager>>) -> impl Respo
             HttpResponse::BadRequest().json(response)
         }
     }
+}
+
+#[get("/ws/")]
+pub async fn ws_route(req: HttpRequest, stream: web::Payload) -> actix_web::Result<HttpResponse> {
+    ws::start(WsSession::new(), &req, stream)
 }
