@@ -1,6 +1,6 @@
 use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
-use utoipa::ToSchema;
+use utoipa::{IntoParams, ToSchema};
 use validator::Validate;
 use crate::utils::validation::validator::{
     required, valid_phone_number, valid_name, required_int, valid_password
@@ -148,4 +148,36 @@ pub struct Notes {
     pub ip_address: String,
     #[serde(serialize_with = "serialize_datetime")]
     pub last_update: chrono::DateTime<Utc>,
+}
+
+#[derive(Debug, Clone, Deserialize, IntoParams)]
+pub struct HeaderParams {
+    pub tablename: String,
+}
+
+#[derive(Debug, Clone, Deserialize, IntoParams)]
+pub struct TableDataParams {
+    pub tablename: String,
+    pub limit: i32,
+    pub offset: i32,
+    #[param(required = false)]
+    pub filter: Option<String>,
+    pub sort: Option<String>,
+    pub order: Option<String>,
+    pub nidkey: Option<String>,
+    // pub nidvalue: Option<String>,
+}
+
+#[derive(Debug)]
+pub struct QueryClass {
+    pub query: String,
+    pub query_total_all: String,
+    pub query_total_with_filter: String,
+}
+
+#[derive(Debug, Serialize, ToSchema)]
+pub struct ResultList {
+    pub totalNotFiltered: i32,
+    pub total: i32,
+    pub rows: Vec<serde_json::Value>, // Pastikan ini bisa dikonversi ke JSON
 }
