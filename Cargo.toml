@@ -7,8 +7,8 @@ include = ["templates/**/*"]
 
 [dependencies]
 actix-web = "4.3.1"
-shuttle-actix-web = "0.53.0"
-shuttle-runtime = "0.53.0"
+shuttle-actix-web = "0.54.0"
+shuttle-runtime = "0.54.0"
 tokio = "1.26.0"
 tiberius = { version="0.12.3" , features = ["sql-browser-tokio", "chrono"]}
 bb8 = "0.9.0"

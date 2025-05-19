@@ -5,6 +5,7 @@ use bb8_tiberius::ConnectionManager;
 use chrono::{NaiveDateTime, Utc};
 use handlebars::Handlebars;
 use lettre::{transport::smtp::authentication::Credentials, Message, SmtpTransport, Transport};
+use shuttle_runtime::SecretStore;
 use tiberius::QueryStream;
 
 use crate::contexts::{connection::Transaction, model::{ActionResult, EmailRequest}};
@@ -14,12 +15,12 @@ use super::generic_service::GenericService;
 pub struct MailService;
 
 impl MailService {
-    pub async  fn send_email_to(request: EmailRequest) -> ActionResult<String, String> {
+    pub async  fn send_email_to(request: EmailRequest, secrets: web::Data<SecretStore>) -> ActionResult<String, String> {
         let mut result: ActionResult<String, String> = ActionResult::default();
-
-        let smtp_username = "8cf4d6002@smtp-brevo.com";
-        let smtp_password = "m0bfcwQOYXkvr6qp";
-        let smtp_server = "smtp-relay.brevo.com";
+        
+        let smtp_username = secrets.get("SMTP_USER").expect("secret was not found");
+        let smtp_password = secrets.get("SMTP_PASSWORD").expect("secret was not found");
+        let smtp_server = secrets.get("SMTP_SERVER").expect("secret was not found");
 
         // Baca template
         let template_str = include_str!("../../templates/mail_to.mustache");
@@ -71,7 +72,7 @@ impl MailService {
 
         let creds = Credentials::new(smtp_username.to_string(), smtp_password.to_string());
 
-        let mailer = SmtpTransport::relay(smtp_server)
+        let mailer = SmtpTransport::relay(&smtp_server)
             .unwrap()
             .credentials(creds)
             .build();
@@ -92,12 +93,12 @@ impl MailService {
         return result;
     }
 
-    pub async  fn send_email_from(request: EmailRequest) -> ActionResult<String, String> {
+    pub async  fn send_email_from(request: EmailRequest, secrets: web::Data<SecretStore>) -> ActionResult<String, String> {
         let mut result: ActionResult<String, String> = ActionResult::default();
 
-        let smtp_username = "8cf4d6002@smtp-brevo.com";
-        let smtp_password = "m0bfcwQOYXkvr6qp";
-        let smtp_server = "smtp-relay.brevo.com";
+        let smtp_username = secrets.get("SMTP_USER").expect("secret was not found");
+        let smtp_password = secrets.get("SMTP_PASSWORD").expect("secret was not found");
+        let smtp_server = secrets.get("SMTP_SERVER").expect("secret was not found");
 
         // Baca template
         let template_str = include_str!("../../templates/mail_from.mustache");
@@ -149,7 +150,7 @@ impl MailService {
 
         let creds = Credentials::new(smtp_username.to_string(), smtp_password.to_string());
 
-        let mailer = SmtpTransport::relay(smtp_server)
+        let mailer = SmtpTransport::relay(&smtp_server)
             .unwrap()
             .credentials(creds)
             .build();

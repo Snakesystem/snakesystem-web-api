@@ -1,4 +1,4 @@
-use actix_web::{get, web, HttpResponse, Responder, Scope};
+use actix_web::{get, post, web, HttpResponse, Responder, Scope};
 use bb8::Pool;
 use bb8_tiberius::ConnectionManager;
 use serde_json::json;
@@ -9,6 +9,7 @@ pub fn data_scope() -> Scope {
     web::scope("/data")
         .service(get_header)
         .service(get_table_data)
+        .service(clear_data)
 }
 
 #[get("/header")]
@@ -37,6 +38,34 @@ async fn get_table_data(params: web::Query<TableDataParams>, pool: web::Data<Poo
     match data {
         Ok(response) => {
             return HttpResponse::Ok().json(response);
+        },
+        Err(e) => {
+            return HttpResponse::InternalServerError().json(
+                json!({"error": e.to_string()})
+            );
+        },
+        
+    }
+}
+
+#[post("/clear")]
+async fn clear_data(connection: web::Data<Pool<ConnectionManager>>) -> impl Responder {
+
+    match connection.clone().get().await {
+        Ok(mut conn) => {
+            match conn.query("TRUNCATE TABLE TempImport", &[]).await {
+                Ok(_) => {
+                    return HttpResponse::Ok().json(json!({
+                        "result": true,
+                        "message": "Data berhasil dibersihkan"
+                    }));
+                },
+                Err(e) => {
+                    return HttpResponse::InternalServerError().json(
+                        json!({"error": e.to_string()})
+                    );
+                },
+            }
         },
         Err(e) => {
             return HttpResponse::InternalServerError().json(

@@ -6,6 +6,7 @@ use bb8_tiberius::ConnectionManager;
 use handlebars::Handlebars;
 use lettre::{transport::smtp::authentication::Credentials, Message, SmtpTransport, Transport as _};
 use serde_json::json;
+use shuttle_runtime::SecretStore;
 use validator::Validate;
 
 use crate::{contexts::model::{ActionResult, ContactRequest, EmailRequest}, services::mail_service::MailService};
@@ -20,7 +21,7 @@ pub fn mail_scope() -> Scope {
 }
 
 #[post("/contact")]
-async fn contact_form(req: HttpRequest, connection: web::Data<Pool<ConnectionManager>>, form: web::Json<EmailRequest>) -> impl Responder {
+async fn contact_form(req: HttpRequest, connection: web::Data<Pool<ConnectionManager>>, form: web::Json<EmailRequest>, secrets: web::Data<SecretStore>) -> impl Responder {
 
     if let Err(err) = form.validate() {
         return HttpResponse::BadRequest().json(json!({
@@ -39,13 +40,13 @@ async fn contact_form(req: HttpRequest, connection: web::Data<Pool<ConnectionMan
         let email_sender = MailService::send_email_from({
             sender.recipient = String::from("feryirawansyah09@gmail.com");
             sender
-        }).await;
+        }, secrets.clone()).await;
 
         if email_sender.result {
             let email_receiver = MailService::send_email_to({
                 receiver.message = String::from("Terima kasih telah menghubungi kami. Kami akan segera menghubungi anda.");
                 receiver
-            }).await;
+            }, secrets).await;
             if email_receiver.result {
                 result.result = true;
                 result.message = String::from("Email berhasil dikirim.");

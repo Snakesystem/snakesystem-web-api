@@ -84,6 +84,7 @@ async fn main(#[shuttle_runtime::Secrets] secrets: SecretStore) -> ShuttleActixW
                 .url("/api-docs/openapi.json", ApiDoc::openapi())
         )
         .app_data(web::Data::new(db_pool.clone()))
+        .app_data(web::Data::new(secrets.clone()))
         .app_data(web::JsonConfig::default().error_handler(GenericService::json_error_handler))
         .default_service(route().to(GenericService::not_found));
     };
