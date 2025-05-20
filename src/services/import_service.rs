@@ -91,6 +91,12 @@ impl ImportService {
                             send_ws_event("import_progress", &progress);
                         },
                         Err(e) => {
+                            send_ws_event("import_error", serde_json::json!({
+                                "result": false,
+                                "imported": rowsaffected,
+                                "message": "Insert error",
+                                "error": format!("Query failed: {}", e)
+                            }));
                             result.message = "Insert error".to_string();
                             result.error = Some(format!("Query failed: {}", e));
                             return result;
@@ -119,12 +125,7 @@ impl ImportService {
             result.result = true;
             result.message = format!("Berhasil insert {} baris.", rowsaffected);
         } else {
-            send_ws_event("import_error", serde_json::json!({
-                "result": false,
-                "imported": rowsaffected,
-                "message": result.message.clone(),
-                "error": result.error.clone()
-            }));
+            
             trans.rollback().await.ok();
             result.message = "Tidak ada data yang di-insert.".to_string();
         }
