@@ -1,4 +1,5 @@
 use std::path::{Path, PathBuf};
+use calamine::{open_workbook_auto, DataType, Reader};
 use futures::StreamExt;
 use tokio_util::compat::TokioAsyncReadCompatExt;
 use actix_web::web;
@@ -91,15 +92,8 @@ impl ImportService {
                             send_ws_event("import_progress", &progress);
                         },
                         Err(e) => {
-                            send_ws_event("import_error", serde_json::json!({
-                                "result": false,
-                                "imported": rowsaffected,
-                                "message": "Insert error",
-                                "error": format!("Query failed: {}", e)
-                            }));
                             result.message = "Insert error".to_string();
                             result.error = Some(format!("Query failed: {}", e));
-                            return result;
                         }
                     }
                 }
@@ -125,7 +119,12 @@ impl ImportService {
             result.result = true;
             result.message = format!("Berhasil insert {} baris.", rowsaffected);
         } else {
-            
+            send_ws_event("import_error", serde_json::json!({
+                "result": false,
+                "imported": rowsaffected,
+                "message": "Insert error",
+                "error": result.error.clone()
+            }));
             trans.rollback().await.ok();
             result.message = "Tidak ada data yang di-insert.".to_string();
         }
@@ -137,148 +136,295 @@ impl ImportService {
         let mut result = ActionResult::default();
         let mut rowsaffected: u64 = 0;
 
-        // Hitung total baris untuk progress
-        let file_for_count = match File::open(&file_path).await {
-            Ok(f) => f,
-            Err(e) => {
-                result.message = "File open error".into();
-                result.error = Some(format!("Failed to open file: {}", e));
+        // Hitung total baris
+        let total_count = match Self::count_txt_lines(&file_path, false).await {
+            Ok(count) => count,
+            Err(err) => {
+                result.message = "File open error".to_string();
+                result.error = Some(format!("Failed to open file: {}", err));
                 return result;
             }
         };
-        let mut lines = BufReader::new(file_for_count).lines();
-        let mut total_count = 0u64;
-        while lines.next_line().await.unwrap_or(None).is_some() {
-            total_count += 1;
-        }
 
-        // Mulai transaction
         let trans = match Transaction::begin(&connection).await {
-            Ok(t) => t,
-            Err(e) => {
-                result.message = "Internal server error".into();
-                result.error = Some(format!("Failed to begin transaction: {}", e));
+            Ok(trans) => trans,
+            Err(err) => {
+                result.message = "Internal server error".to_string();
+                result.error = Some(format!("Failed to begin transaction: {}", err));
                 return result;
             }
         };
 
-        // Buka file ulang untuk proses
-        let file = match File::open(&file_path).await {
-            Ok(f) => f,
-            Err(e) => {
-                result.message = "File open error".into();
-                result.error = Some(format!("Failed to open file: {}", e));
-                return result;
-            }
-        };
-        let mut reader = BufReader::new(file).lines();
-        let mut delimiter: Option<char> = None;
-        let mut header_column_count = 0;
-
-        let mut line_number = 0;
-        while let Some(line_res) = reader.next_line().await.transpose() {
-            let line = match line_res {
-                Ok(l) => l.trim().to_string(),
-                Err(e) => {
-                    result.message = "TXT parse error".into();
-                    result.error = Some(format!("Failed to read line: {}", e));
-                    trans.rollback().await.ok();
-                    return result;
-                }
-            };
-
-            if line.is_empty() {
-                continue;
-            }
-
-            line_number += 1;
-
-            // Deteksi delimiter dari baris pertama
-            if delimiter.is_none() {
-                delimiter = Self::detect_delimiter(&line);
-                if delimiter.is_none() {
-                    result.message = "Delimiter tidak dikenali".into();
-                    result.error = Some("Gunakan , ; atau | sebagai pemisah.".into());
-                    trans.rollback().await.ok();
-                    return result;
-                }
-
-                // Simpan jumlah kolom sebagai referensi
-                header_column_count = line.split(delimiter.unwrap()).count();
-            } else {
-                // Validasi jumlah kolom konsisten
-                let fields: Vec<&str> = line.split(delimiter.unwrap()).collect();
-                if fields.len() != header_column_count {
-                    result.message = format!("Baris {} tidak konsisten jumlah kolom", line_number);
-                    result.error = Some(format!("Di baris {}, ditemukan {} kolom, seharusnya {}.", line_number, fields.len(), header_column_count));
-                    trans.rollback().await.ok();
-                    return result;
-                }
-
-                // Insert ke DB (disesuaikan dengan jumlah kolom)
-                let query = r#"
-                    INSERT INTO TxtImport (Content, LastUpdate)
-                    VALUES (@P1, @P2);
-                "#;
-                let now = Utc::now().naive_utc();
-                let value = fields.join(" | "); // Simpan sebagai satu string misalnya
-
-                match trans.conn.lock().await.as_mut() {
-                    Some(conn) => {
-                        match conn.execute(query, &[&value, &now]).await {
-                            Ok(res) => {
-                                rowsaffected += res.rows_affected().iter().sum::<u64>();
-                                send_ws_event("import_txt_progress", &serde_json::json!({
-                                    "current": rowsaffected,
-                                    "total": total_count,
-                                    "message": result.message.clone()
-                                }));
-                            }
-                            Err(e) => {
-                                result.message = "Insert error".into();
-                                result.error = Some(format!("Query failed: {}", e));
-                                return result;
-                            }
-                        }
-                    }
-                    None => {
-                        result.message = "Internal server error".into();
-                        result.error = Some("Failed to get connection".into());
+        match trans.conn.lock().await.as_mut() {
+            Some(conn) => {
+                let file = match File::open(&file_path).await {
+                    Ok(f) => f,
+                    Err(err) => {
+                        result.message = "File open error".to_string();
+                        result.error = Some(format!("Failed to open file: {}", err));
                         return result;
                     }
+                };
+
+                let mut reader = BufReader::new(file).lines();
+                let mut delimiter: Option<char> = None;
+                // let mut header_column_count = 0;
+                let mut line_number = 0;
+
+                while let Some(line_res) = reader.next_line().await.transpose() {
+                    let line = match line_res {
+                        Ok(l) => l.trim().to_string(),
+                        Err(e) => {
+                            result.message = "TXT parse error".to_string();
+                            result.error = Some(format!("Failed to read line: {}", e));
+                            return result;
+                        }
+                    };
+
+                    if line.is_empty() {
+                        continue;
+                    }
+
+                    line_number += 1;
+
+                    if delimiter.is_none() {
+                        delimiter = Self::detect_delimiter(&line);
+                        if delimiter.is_none() {
+                            result.message = "Delimiter tidak dikenali".to_string();
+                            result.error = Some("Gunakan , ; atau | sebagai pemisah.".to_string());
+                            return result;
+                        }
+
+                        // header_column_count = line.split(delimiter.unwrap()).count();
+                        continue; // skip header
+                    }
+
+                    let delimiter = delimiter.unwrap();
+                    let fields: Vec<&str> = line.split(delimiter).collect();
+
+                    if fields.len() != 9 {
+                        result.message = format!("Baris {} harus punya 9 kolom", line_number);
+                        result.error = Some(format!("Ditemukan {} kolom, seharusnya 9.", fields.len()));
+                        return result;
+                    }
+
+                    let email        = fields[0].trim();
+                    let full_name    = fields[1].trim();
+                    let age: i32     = match fields[2].trim().parse() {
+                        Ok(a) => a,
+                        Err(_) => {
+                            result.message = format!("Baris {}: age bukan angka", line_number);
+                            result.error = Some(format!("Invalid number: {}", fields[2]));
+                            return result;
+                        }
+                    };
+                    let sex          = fields[3].trim();
+                    let contact      = fields[4].trim();
+                    let product_name = fields[5].trim();
+                    let product_count: i32 = match fields[6].trim().parse() {
+                        Ok(p) => p,
+                        Err(_) => {
+                            result.message = format!("Baris {}: product count bukan angka", line_number);
+                            result.error = Some(format!("Invalid number: {}", fields[6]));
+                            return result;
+                        }
+                    };
+                    let price: f64 = match fields[7].trim().parse() {
+                        Ok(p) => p,
+                        Err(_) => {
+                            result.message = format!("Baris {}: price bukan angka", line_number);
+                            result.error = Some(format!("Invalid number: {}", fields[7]));
+                            return result;
+                        }
+                    };
+                    let ip_address = fields[8].trim();
+                    let last_update = Utc::now().naive_utc();
+
+                    let query = r#"
+                        INSERT INTO TempImport (
+                            Email, FullName, Age, Sex, Contact, ProductName,
+                            ProductCount, Price, IPAddress, LastUpdate
+                        )
+                        VALUES (@P1, @P2, @P3, @P4, @P5, @P6, @P7, @P8, @P9, @P10);
+                    "#;
+
+                    match conn.execute(query, &[&email, &full_name, &age, &sex, &contact, &product_name, &product_count, &price, &ip_address, &last_update]).await {
+                        Ok(res) => {
+                            rowsaffected += res.rows_affected().iter().sum::<u64>();
+                            send_ws_event("import_progress", &serde_json::json!({
+                                "current": rowsaffected,
+                                "total": total_count,
+                                "message": result.message.clone()
+                            }));
+                        },
+                        Err(e) => {
+                            result.message = "Insert error".to_string();
+                            result.error = Some(format!("Query failed: {}", e));
+                        }
+                    }
                 }
+            }
+            None => {
+                result.message = "Internal server error".to_string();
+                result.error = Some("Failed to get connection from pool".to_string());
+                return result;
             }
         }
 
-
-        // Commit atau rollback
         if rowsaffected > 0 {
-            if let Err(e) = trans.commit().await {
-                result.message = "Failed to commit".into();
-                result.error = Some(format!("Commit error: {}", e));
-                return result;
-            }
-            send_ws_event("import_txt_done", serde_json::json!({
+            send_ws_event("import_done", serde_json::json!({
                 "result": true,
                 "imported": rowsaffected,
                 "message": result.message.clone()
             }));
+            if let Err(e) = trans.commit().await {
+                result.message = "Failed to commit".to_string();
+                result.error = Some(format!("Commit error: {}", e));
+                return result;
+            }
             result.result = true;
-            result.message = format!("Berhasil insert {} baris TXT.", rowsaffected);
+            result.message = format!("Berhasil insert {} baris.", rowsaffected);
         } else {
-            trans.rollback().await.ok();
-            send_ws_event("import_txt_error", serde_json::json!({
+            send_ws_event("import_error", serde_json::json!({
                 "result": false,
                 "imported": rowsaffected,
-                "message": result.message.clone(),
+                "message": "Insert error",
                 "error": result.error.clone()
             }));
-            result.message = "Tidak ada data TXT yang di-insert.".into();
+            trans.rollback().await.ok();
+            result.message = "Tidak ada data yang di-insert.".to_string();
         }
 
         result
     }
 
+    pub async fn import_xlsx_from_file(file_path: PathBuf, connection: web::Data<Pool<ConnectionManager>>, has_header: bool) -> ActionResult<String, String> {
+        let mut result = ActionResult::default();
+        let mut rowsaffected: u64 = 0;
+
+        let mut workbook = match open_workbook_auto(&file_path) {
+            Ok(wb) => wb,
+            Err(e) => {
+                result.message = "Gagal membuka file Excel".to_string();
+                result.error = Some(format!("Error: {}", e));
+                return result;
+            }
+        };
+
+        let range = match workbook.worksheet_range_at(0).ok_or("Sheet kosong") {
+            Ok(Ok(r)) => r,
+            _ => {
+                result.message = "Worksheet tidak ditemukan atau error".into();
+                result.error = Some("Sheet pertama tidak bisa diakses".into());
+                return result;
+            }
+        };
+
+        let total_count = range.height() as u64 - if has_header { 1 } else { 0 };
+
+        let trans = match Transaction::begin(&connection).await {
+            Ok(t) => t,
+            Err(e) => {
+                result.message = "Internal server error".to_string();
+                result.error = Some(format!("Failed to begin transaction: {}", e));
+                return result;
+            }
+        };
+
+        for (i, row) in range.rows().enumerate() {
+            if has_header && i == 0 {
+                continue; // Skip header
+            }
+
+            if row.len() < 9 {
+                println!("Baris {} tidak memiliki 10 kolom, {}", i + 1, row.len());
+                result.message = format!("Baris {} tidak memiliki 10 kolom", i + 1);
+                result.error = Some(format!("Ditemukan hanya {} kolom", row.len()));
+                trans.rollback().await.ok();
+                return result;
+            }
+
+            let extract = |i: usize| -> String {
+                match row.get(i) {
+                    Some(DataType::String(s)) => s.clone(),
+                    Some(DataType::Float(f)) => f.to_string(),
+                    Some(DataType::Int(n)) => n.to_string(),
+                    Some(DataType::Bool(b)) => b.to_string(),
+                    Some(DataType::Empty) | None => "".to_string(),
+                    Some(val) => val.to_string(),
+                }
+            };
+
+            let email        = extract(0);
+            let full_name    = extract(1);
+            let age: i32     = extract(2).parse().unwrap_or_default();
+            let sex          = extract(3);
+            let contact      = extract(4);
+            let product_name = extract(5);
+            let product_count: i32 = extract(6).parse().unwrap_or(0);
+            let price: f64   = extract(7).parse().unwrap_or(0.0);
+            let ip_address   = extract(8);
+            let last_update  = Utc::now().naive_utc();
+
+            let query = r#"
+                INSERT INTO TempImport (
+                    Email, FullName, Age, Sex, Contact, ProductName,
+                    ProductCount, Price, IPAddress, LastUpdate
+                ) VALUES (@P1, @P2, @P3, @P4, @P5, @P6, @P7, @P8, @P9, @P10);
+            "#;
+
+            if let Some(conn) = trans.conn.lock().await.as_mut() {
+                match conn.execute(query, &[
+                    &email, &full_name, &age, &sex, &contact, &product_name,
+                    &product_count, &price, &ip_address, &last_update
+                ]).await {
+                    Ok(res) => {
+                        println!("Rows affected: {:?}", res.rows_affected());
+                        rowsaffected += res.rows_affected().iter().sum::<u64>();
+
+                        let progress = serde_json::json!({
+                            "current": rowsaffected,
+                            "total": total_count,
+                            "message": result.message.clone()
+                        });
+                        send_ws_event("import_progress", &progress);
+                    }
+                    Err(e) => {
+                        result.message = "Insert error".into();
+                        result.error = Some(format!("Query failed: {}", e));
+                    }
+                }
+            } else {
+                result.message = "Failed to get connection".into();
+                result.error = Some("DB connection error".into());
+                return result;
+            }
+        }
+
+        if rowsaffected > 0 {
+            send_ws_event("import_done", &serde_json::json!({
+                "result": true,
+                "imported": rowsaffected,
+                "message": "Import selesai"
+            }));
+            trans.commit().await.ok();
+            result.result = true;
+            result.message = format!("Berhasil import {} baris.", rowsaffected);
+        } else {
+            send_ws_event("import_error", serde_json::json!({
+                "result": false,
+                "imported": rowsaffected,
+                "message": "Insert error",
+                "error": result.error.clone()
+            }));
+            trans.rollback().await.ok();
+            result.message = "Tidak ada data yang berhasil di-insert".into();
+            result.error = Some("Semua baris gagal atau kosong".into());
+        }
+
+        result
+    }
+    
     pub async fn count_csv_rows(file_path: &Path) -> Result<usize, std::io::Error> {
         let file = File::open(file_path).await?;
         let reader = BufReader::new(file);
@@ -291,6 +437,23 @@ impl ImportService {
             while let Some(_) = lines.next_line().await? {
                 count += 1;
             }
+        }
+
+        Ok(count)
+    }
+
+    pub async fn count_txt_lines<P: AsRef<Path>>(file_path: P, has_header: bool) -> std::io::Result<u64> {
+        let file = File::open(file_path).await?;
+        let reader = BufReader::new(file);
+        let mut lines = reader.lines();
+
+        let mut count = 0u64;
+        while lines.next_line().await?.is_some() {
+            count += 1;
+        }
+
+        if !has_header && count > 0 {
+            count -= 1;
         }
 
         Ok(count)

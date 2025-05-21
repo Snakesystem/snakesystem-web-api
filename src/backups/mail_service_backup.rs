@@ -6,6 +6,11 @@ use chrono::{NaiveDateTime, Utc};
 use handlebars::Handlebars;
 use lettre::{transport::smtp::authentication::Credentials, Message, SmtpTransport, Transport};
 use tiberius::QueryStream;
+use calamine::{open_workbook_auto, Reader as _, DataType};
+use dbase::{FieldName, FieldValue, FieldType, Record, TableWriterBuilder};
+use std::fs::File;
+use std::path::Path;
+use std::io::BufWriter;
 
 use crate::contexts::{connection::Transaction, model::{ActionResult, EmailRequest}};
 
@@ -221,4 +226,72 @@ impl MailService {
         return result;
         
     }
+
+    pub fn convert_xlsx_to_dbf<P: AsRef<Path>>(xlsx_path: P, dbf_path: P, has_header: bool) -> Result<(), Box<dyn std::error::Error>> {
+        let mut workbook = open_workbook_auto(&xlsx_path)?;
+        let range = workbook
+            .worksheet_range_at(0)
+            .ok_or("Sheet pertama tidak ditemukan")??;
+
+        let mut rows = range.rows();
+
+        // Ambil header atau generate default field names
+        let headers: Vec<String> = if has_header {
+            rows.next()
+                .ok_or("Tidak ada baris header")?
+                .iter()
+                .enumerate()
+                .map(|(i, cell)| match cell {
+                    DataType::String(s) => s.clone(),
+                    _ => format!("Field{}", i + 1),
+                })
+                .collect()
+        } else {
+            // Generate default names: Field1, Field2, ...
+            let width = range.width();
+            (0..width).map(|i| format!("Field{}", i + 1)).collect()
+        };
+
+        // Konversi nama-nama field ke FieldName
+        let field_names: Vec<FieldName> = headers
+            .iter()
+            .map(|s| FieldName::try_from(s.as_str()).unwrap_or(FieldName::from("Field")))
+            .collect();
+
+        // Tentukan semua field sebagai karakter (String) untuk fleksibilitas
+        let fields_def = field_names
+            .iter()
+            .map(|name| (name.clone(), FieldType::Character(Some(255))))
+            .collect::<Vec<_>>();
+
+        // Buat writer DBF
+        let file = File::create(&dbf_path)?;
+        let writer = BufWriter::new(file);
+        let mut table_writer = TableWriterBuilder::new().add_fields(&fields_def)?.build(writer)?;
+
+        // Konversi tiap baris data
+        for row in rows {
+            let record = row
+                .iter()
+                .enumerate()
+                .map(|(i, cell)| {
+                    let val = match cell {
+                        DataType::String(s) => FieldValue::Character(s.clone()),
+                        DataType::Int(n) => FieldValue::Character(n.to_string()),
+                        DataType::Float(f) => FieldValue::Character(f.to_string()),
+                        DataType::Bool(b) => FieldValue::Character(b.to_string()),
+                        DataType::Empty => FieldValue::Character(String::new()),
+                        val => FieldValue::Character(val.to_string()),
+                    };
+                    (field_names[i].clone(), val)
+                })
+                .collect::<Record>();
+
+            table_writer.write_record(&record)?;
+        }
+
+        table_writer.flush()?;
+        Ok(())
+    }
+
 }

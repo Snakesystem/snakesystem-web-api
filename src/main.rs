@@ -31,6 +31,7 @@ mod services {
     pub mod library_service;
     pub mod data_service;
     pub mod import_service;
+    pub mod export_service;
 }
 
 mod handlers {
