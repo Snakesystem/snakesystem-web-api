@@ -1,5 +1,6 @@
-use std::path::{Path, PathBuf};
+use std::{fs, path::{Path, PathBuf}};
 use calamine::{open_workbook_auto, DataType, Reader};
+use dbase::FieldValue;
 use futures::StreamExt;
 use tokio_util::compat::TokioAsyncReadCompatExt;
 use actix_web::web;
@@ -337,7 +338,6 @@ impl ImportService {
             }
 
             if row.len() < 9 {
-                println!("Baris {} tidak memiliki 10 kolom, {}", i + 1, row.len());
                 result.message = format!("Baris {} tidak memiliki 10 kolom", i + 1);
                 result.error = Some(format!("Ditemukan hanya {} kolom", row.len()));
                 trans.rollback().await.ok();
@@ -379,7 +379,6 @@ impl ImportService {
                     &product_count, &price, &ip_address, &last_update
                 ]).await {
                     Ok(res) => {
-                        println!("Rows affected: {:?}", res.rows_affected());
                         rowsaffected += res.rows_affected().iter().sum::<u64>();
 
                         let progress = serde_json::json!({
@@ -425,6 +424,262 @@ impl ImportService {
         result
     }
     
+    pub async fn import_dbf_from_file(file_path: PathBuf, connection: web::Data<Pool<ConnectionManager>>) -> ActionResult<String, String> {
+        let mut result = ActionResult::default();
+        let mut rowsaffected: u64 = 0; 
+        let trans = match Transaction::begin(&connection).await {
+            Ok(trans) => trans,
+            Err(e) => {
+                result.message = "Failed to get connection".into();
+                result.error = Some(e.to_string());
+                return result;
+            }
+        };
+        if let Err(e) = dbase::read(&file_path) {
+            result.message = "Failed to read DBF".into();
+            result.error = Some(e.to_string());
+            return result;
+        } else {
+            let records = dbase::read(&file_path).unwrap();
+            let total_count = records.len() as u64;
+
+            match trans.conn.lock().await.as_mut() {
+                Some(conn) => {
+                    let query = r#"
+                    INSERT INTO TempImport (
+                        Email, FullName, Age, Sex, Contact, ProductName,
+                        ProductCount, Price, IPAddress, LastUpdate
+                    ) VALUES (@P1, @P2, @P3, @P4, @P5, @P6, @P7, @P8, @P9, @P10);
+                    "#;
+
+                    for record in records {
+                        let email = match record.get("EMAIL") {
+                            Some(FieldValue::Character(Some(s))) => s.clone(),
+                            _ => String::new(),
+                        };
+                        let full_name = match record.get("FULLNAME") {
+                            Some(FieldValue::Character(Some(s))) => s.clone(),
+                            _ => String::new(),
+                        };
+                        let age: i32 = match record.get("AGE") {
+                            Some(FieldValue::Numeric(Some(n))) => *n as i32,
+                            _ => 0,
+                        };
+                        let sex = match record.get("SEX") {
+                            Some(FieldValue::Character(Some(s))) => s.clone(),
+                            _ => String::new(),
+                        };
+                        let contact = match record.get("CONTACT") {
+                            Some(FieldValue::Character(Some(s))) => s.clone(),
+                            _ => String::new(),
+                        };
+                        let product_name = match record.get("PRODUCTNAM") {
+                            Some(FieldValue::Character(Some(s))) => s.clone(),
+                            _ => String::new(),
+                        };
+                        let product_count: i32 = match record.get("PRODUCTCOU") {
+                            Some(FieldValue::Numeric(Some(n))) => *n as i32,
+                            _ => 0,
+                        };
+                        let price: f64 = match record.get("PRICE") {
+                            Some(FieldValue::Numeric(Some(n))) => *n,
+                            _ => 0.0,
+                        };
+                        let ip_address = match record.get("IPADDRESS") {
+                            Some(FieldValue::Character(Some(s))) => s.clone(),
+                            _ => String::new(),
+                        };
+                        let last_update = chrono::Utc::now();
+
+                        match conn.execute(query, &[&email, &full_name, &age, &sex, &contact, &product_name, &product_count, &price, &ip_address, &last_update]).await {
+                            Ok(res) => {
+                                rowsaffected += res.rows_affected().iter().sum::<u64>();
+
+                                // bagian web socket
+                                let progress = serde_json::json!({
+                                    "current": rowsaffected,
+                                    "total": total_count,
+                                    "message": result.message.clone()
+                                });
+
+                                send_ws_event("import_progress", &progress);
+                            },
+                            Err(e) => {
+                                result.message = "Insert error".to_string();
+                                result.error = Some(format!("Query failed: {}", e));
+                            }
+                        }
+                    }
+
+                }
+                None => {
+                    result.message = "Failed to get connection".into();
+                    result.error = Some("DB connection error".into());
+                    return result;
+                }
+                
+            }
+            if rowsaffected > 0 {
+                send_ws_event("import_done", serde_json::json!({
+                    "result": true,
+                    "imported": rowsaffected,
+                    "message": result.message.clone()
+                }));
+                if let Err(e) = trans.commit().await {
+                    result.message = "Failed to commit".to_string();
+                    result.error = Some(format!("Commit error: {}", e));
+                    return result;
+                }
+                result.result = true;
+                result.message = format!("Berhasil insert {} baris.", rowsaffected);
+            } else {
+                send_ws_event("import_error", serde_json::json!({
+                    "result": false,
+                    "imported": rowsaffected,
+                    "message": "Insert error",
+                    "error": result.error.clone()
+                }));
+                trans.rollback().await.ok();
+                result.message = "Tidak ada data yang di-insert.".to_string();
+            }
+        }
+
+        return result;
+    }
+
+    pub async fn import_xml_from_file(file_path: PathBuf, connection: web::Data<Pool<ConnectionManager>>) -> ActionResult<String, String> {
+        let mut result = ActionResult::default();
+        let mut rowsaffected: u64 = 0;
+
+        // Baca isi file XML
+        let xml_content = match fs::read_to_string(&file_path) {
+            Ok(s) => s,
+            Err(e) => {
+                result.message = "File open error".into();
+                result.error = Some(format!("Failed to read XML: {}", e));
+                return result;
+            }
+        };
+
+        // Split berdasarkan <Record>
+        let records: Vec<&str> = xml_content
+            .split("<Record>")
+            .skip(1) // skip header
+            .map(|s| s.split("</Record>").next().unwrap_or("").trim())
+            .collect();
+
+        let total_count = records.len() as u64;
+
+        let trans = match Transaction::begin(&connection).await {
+            Ok(t) => t,
+            Err(e) => {
+                result.message = "Internal server error".into();
+                result.error = Some(format!("Failed to begin transaction: {}", e));
+                return result;
+            }
+        };
+
+        if let Some(conn) = trans.conn.lock().await.as_mut() {
+            for (idx, record) in records.iter().enumerate() {
+                let get_tag = |field: &str| -> String {
+                    record
+                        .split(&format!("<{0}>", field))
+                        .nth(1)
+                        .and_then(|s| s.split(&format!("</{0}>", field)).next())
+                        .unwrap_or("")
+                        .trim()
+                        .to_string()
+                };
+
+                // Ambil value masing-masing field dari string XML
+                let email = get_tag("Email");
+                let full_name = get_tag("FullName");
+                let age = get_tag("Age").parse::<i32>().unwrap_or(0);
+                let sex = get_tag("Sex");
+                let contact = get_tag("Contact");
+                let product_name = get_tag("ProductName");
+                let product_count = get_tag("ProductCount").parse::<i32>().unwrap_or(0);
+                let price = get_tag("Price").parse::<f64>().unwrap_or(0.0);
+                let ip_address = get_tag("IPAddress");
+                let last_update = Utc::now().naive_utc();
+
+                // Jalankan insert
+                let query = r#"
+                    INSERT INTO TempImport (
+                        Email, FullName, Age, Sex, Contact, ProductName,
+                        ProductCount, Price, IPAddress, LastUpdate
+                    )
+                    VALUES (@P1, @P2, @P3, @P4, @P5, @P6, @P7, @P8, @P9, @P10);
+                "#;
+
+                match conn
+                    .execute(
+                        query,
+                        &[
+                            &email,
+                            &full_name,
+                            &age,
+                            &sex,
+                            &contact,
+                            &product_name,
+                            &product_count,
+                            &price,
+                            &ip_address,
+                            &last_update,
+                        ],
+                    )
+                    .await
+                {
+                    Ok(res) => {
+                        rowsaffected += res.rows_affected().iter().sum::<u64>();
+                        send_ws_event(
+                            "import_progress",
+                            &serde_json::json!({
+                                "current": rowsaffected,
+                                "total": total_count
+                            }),
+                        );
+                    }
+                    Err(e) => {
+                        result.message = format!("Baris ke-{} gagal insert", idx + 1);
+                        result.error = Some(format!("Query failed: {}", e));
+                        return result;
+                    }
+                }
+            }
+        } else {
+            result.message = "Internal server error".into();
+            result.error = Some("Failed to get connection".into());
+            return result;
+        }
+
+        if rowsaffected > 0 {
+            send_ws_event("import_done", serde_json::json!({
+                "result": true,
+                "imported": rowsaffected,
+                "message": result.message.clone()
+            }));
+            if let Err(e) = trans.commit().await {
+                result.message = "Failed to commit".to_string();
+                result.error = Some(format!("Commit error: {}", e));
+                return result;
+            }
+            result.result = true;
+            result.message = format!("Berhasil insert {} baris.", rowsaffected);
+        } else {
+            send_ws_event("import_error", serde_json::json!({
+                "result": false,
+                "imported": rowsaffected,
+                "message": "Insert error",
+                "error": result.error.clone()
+            }));
+            trans.rollback().await.ok();
+            result.message = "Tidak ada data yang di-insert.".to_string();
+        }
+
+        result
+    }
+
     pub async fn count_csv_rows(file_path: &Path) -> Result<usize, std::io::Error> {
         let file = File::open(file_path).await?;
         let reader = BufReader::new(file);

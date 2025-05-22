@@ -19,8 +19,10 @@ impl DataService {
             let col_name = col.name();
             let column_type = &col.column_type();
 
+            // println!("Column name: {}, Column type: {:?}", col_name, column_type);
+
             match column_type {
-                ColumnType::NVarchar | ColumnType::BigVarChar | ColumnType::Text => {
+                ColumnType::NVarchar | ColumnType::NChar | ColumnType::BigChar | ColumnType::BigVarChar | ColumnType::Text => {
                     if let Ok(Some(value)) = row.try_get::<&str, _>(i) {
                         json_obj.insert(col_name.to_string(), json!(value));
                     } else {
@@ -84,6 +86,23 @@ impl DataService {
         }
 
         Value::Object(json_obj)
+    }
+
+    pub fn numeric_to_f64(num: &tiberius::numeric::Numeric) -> Option<f64> {
+        let raw = num.value();
+        let scale = num.scale() as u32;
+        let divisor = 10i128.checked_pow(scale)?;
+        let int_part = raw / divisor;
+        let frac_raw = raw.abs() % divisor;
+        let frac_str = format!("{:0>width$}", frac_raw, width = scale as usize);
+
+        let s = if raw < 0 && int_part == 0 {
+            format!("-0.{}", frac_str)
+        } else {
+            format!("{}.{}", int_part, frac_str)
+        };
+
+        s.parse::<f64>().ok()
     }
 
     pub async fn get_header(connection: web::Data<Pool<ConnectionManager>>, tablename: String) -> ActionResult<Vec<serde_json::Value>, String> {
