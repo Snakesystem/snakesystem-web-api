@@ -14,6 +14,7 @@ pub fn export_scope() -> Scope {
         .service(download_xlsx_handler)
         .service(download_xml_handler)
         .service(download_pdf_handler)
+        .service(download_emails)
 }
 
 #[get("/csv")]
@@ -150,4 +151,18 @@ pub async fn download_pdf_handler(connection: web::Data<Pool<ConnectionManager>>
             error: Some(e.to_string()),
         }),
     }
+}
+
+#[get("/download/emails")]
+async fn download_emails() -> Result<HttpResponse, actix_web::Error> {
+    let emails: Vec<String> = (0..1000)
+        .map(|i| format!("user{}@example.com", i))
+        .collect();
+
+    let content = emails.join("\n");
+
+    Ok(HttpResponse::Ok()
+        .content_type("text/plain")
+        .append_header(("Content-Disposition", "attachment; filename=\"emails.txt\""))
+        .body(content))
 }
