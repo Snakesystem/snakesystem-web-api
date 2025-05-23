@@ -1,0 +1,39 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8"/>
+  <style>
+    body { font-family: sans-serif; font-size: 12pt; }
+    table { border-collapse: collapse; width:100%; }
+    th, td { border: 1px solid #333; padding: 4px; }
+    th { background: #eee; }
+  </style>
+</head>
+<body>
+  <h1>TempImport Report</h1>
+  <table>
+    <thead>
+      <tr>
+        <th>Email</th><th>FullName</th><th>Age</th><th>Sex</th><th>Contact</th>
+        <th>ProductName</th><th>ProductCount</th><th>Price</th><th>IPAddress</th><th>LastUpdate</th>
+      </tr>
+    </thead>
+    <tbody>
+    {{ for row in rows }}
+      <tr>
+        <td>{{ row.email }}</td>
+        <td>{{ row.full_name }}</td>
+        <td>{{ row.age }}</td>
+        <td>{{ row.sex }}</td>
+        <td>{{ row.contact }}</td>
+        <td>{{ row.product_name }}</td>
+        <td>{{ row.product_count }}</td>
+        <td>{{ row.price }}</td>
+        <td>{{ row.ip_address }}</td>
+        <td>{{ row.last_update }}</td>
+      </tr>
+    {{ end }}
+    </tbody>
+  </table>
+</body>
+</html>

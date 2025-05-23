@@ -1,4 +1,5 @@
 use chrono::{DateTime, Utc};
+use sailfish::TemplateOnce;
 use serde::{Deserialize, Serialize};
 use utoipa::{IntoParams, ToSchema};
 use validator::Validate;
@@ -187,4 +188,24 @@ pub struct MyRow {
     pub id: i32,
     pub name: String,
     // tambah field lain sesuai kebutuhan
+}
+
+#[derive(Serialize, Debug)]
+pub struct ReportRow {
+    pub email: String,
+    pub full_name: String,
+    pub age: i32,
+    pub sex: String,
+    pub contact: String,
+    pub product_name: String,
+    pub product_count: i32,
+    pub price: f64,
+    pub ip_address: String,
+    pub last_update: String,
+}
+
+#[derive(TemplateOnce, Debug, Serialize)]
+#[template(path = "order-data.stpl")]
+pub struct PdfTemplate {
+    pub rows: Vec<ReportRow>,
 }

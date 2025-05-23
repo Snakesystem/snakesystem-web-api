@@ -12,6 +12,8 @@ pub fn export_scope() -> Scope {
         .service(download_csv_handler)
         .service(download_txt_handler)
         .service(download_xlsx_handler)
+        .service(download_xml_handler)
+        .service(download_pdf_handler)
 }
 
 #[get("/csv")]
@@ -92,6 +94,58 @@ pub async fn download_xlsx_handler(connection: web::Data<Pool<ConnectionManager>
         Err(e) => HttpResponse::InternalServerError().json(ActionResult {
             result: false,
             message: "Failed to read TXT file".into(),
+            data: "".into(),
+            error: Some(e.to_string()),
+        }),
+    }
+}
+
+#[get("/xml")]
+pub async fn download_xml_handler(connection: web::Data<Pool<ConnectionManager>>) -> impl Responder {
+    // Tentukan path output
+    let output_path = PathBuf::from("./exports/tempimport.xml");
+
+    // Panggil service
+    let res: ActionResult<String, String> =
+        ExportService::export_to_xml_file(connection.clone(), output_path.clone()).await;
+
+    if !res.result {
+        return HttpResponse::InternalServerError().json(res);
+    }
+
+    // Baca file dan kirim sebagai download
+    match tokio::fs::read(output_path).await {
+        Ok(bytes) => HttpResponse::Ok()
+            .content_type("application/xml; charset=utf-8")
+            .append_header(("Content-Disposition", "attachment; filename=\"tempimport.xml\""))
+            .body(bytes),
+        Err(e) => HttpResponse::InternalServerError().json(ActionResult {
+            result: false,
+            message: "Failed to read DBF file".into(),
+            data: "".into(),
+            error: Some(e.to_string()),
+        }),
+    }
+}
+
+#[get("/pdf")]
+pub async fn download_pdf_handler(connection: web::Data<Pool<ConnectionManager>>) -> impl Responder {
+    let output_path = PathBuf::from("./exports/tempimport.pdf");
+
+    let res = ExportService::export_to_pdf_file(connection.clone(), output_path.clone()).await;
+
+    if !res.result {
+        return HttpResponse::InternalServerError().json(res);
+    }
+
+    match tokio::fs::read(output_path).await {
+        Ok(bytes) => HttpResponse::Ok()
+            .content_type("application/pdf")
+            .append_header(("Content-Disposition", "attachment; filename=\"tempimport.pdf\""))
+            .body(bytes),
+        Err(e) => HttpResponse::InternalServerError().json(ActionResult {
+            result: false,
+            message: "Failed to read PDF file".into(),
             data: "".into(),
             error: Some(e.to_string()),
         }),

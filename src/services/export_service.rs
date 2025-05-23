@@ -1,15 +1,24 @@
-use std::path::{Path, PathBuf};
+use std::{io::BufWriter, path::Path, process::Command};
 use actix_web::web;
 use bb8::{Pool, PooledConnection};
 use bb8_tiberius::ConnectionManager;
-use dbase::{FieldName, FieldType, FieldValue, Record, TableWriterBuilder};
+// use dbase::{FieldIOError, FieldName, FieldType, FieldValue, FieldWriter, Record, TableWriterBuilder, WritableRecord};
 use futures::StreamExt;
-use tiberius::numeric::Numeric;
+// use printpdf::{BuiltinFont, Mm, PdfDocument};
+use sailfish::TemplateOnce;
+use tiberius::{numeric::Numeric, Uuid};
 use tokio::io::AsyncWriteExt;
 use umya_spreadsheet::*;
-use crate::contexts::model::ActionResult;
+use crate::contexts::model::{ActionResult, PdfTemplate, ReportRow};
 
 use super::data_service::DataService;
+
+
+#[derive(TemplateOnce)]
+#[template(path = "../templates/order-data.stpl")]  // Template sailfish di folder templates/report.stpl
+struct ReportTemplate<'a> {
+    rows: &'a [ReportRow],
+}
 
 pub struct ExportService;
 
@@ -340,83 +349,311 @@ impl ExportService {
         result
     }
 
-    pub async fn export_dbf_to_file(
-        file_path: PathBuf,
-        connection: web::Data<Pool<ConnectionManager>>,
-    ) -> ActionResult<String, String> {
+    pub async fn export_to_xml_file<P: AsRef<Path>>(connection: web::Data<Pool<ConnectionManager>>, output_path: P) -> ActionResult<String, String> {
         let mut result = ActionResult::default();
 
-        let conn = match connection.get().await {
+        // 1. Ambil koneksi
+        let mut conn: PooledConnection<ConnectionManager> = match connection.get().await {
             Ok(c) => c,
             Err(e) => {
-                result.message = "Gagal mendapatkan koneksi database".into();
-                result.error = Some(e.to_string());
+                result.message = "Failed to get DB connection".into();
+                result.error   = Some(e.to_string());
                 return result;
             }
         };
 
-        // Ambil data dari tabel TempImport
-        let rows = match conn
-            .query("SELECT Email, FullName, Age, Sex, Contact, ProductName, ProductCount, Price, IPAddress FROM TempImport", &[])
-            .await
-        {
-            Ok(r) => r,
+        // 2. Query data
+        let query = r#"
+            SELECT Email, FullName, Age, Sex, Contact,
+                ProductName, ProductCount, Price, IPAddress, LastUpdate
+            FROM TempImport
+        "#;
+        let stream = match conn.query(query, &[]).await {
+            Ok(r) => r.into_row_stream(),
             Err(e) => {
-                result.message = "Gagal query data".into();
-                result.error = Some(format!("Query error: {}", e));
+                result.message = "Failed to query".into();
+                result.error   = Some(e.to_string());
                 return result;
             }
         };
 
-        // Definisikan struktur kolom DBF
-        let fields = vec![
-            (FieldName::try_from("EMAIL").unwrap(), FieldType::Character(Some(100))),
-            (FieldName::try_from("FULLNAME").unwrap(), FieldType::Character(Some(100))),
-            (FieldName::try_from("AGE").unwrap(), FieldType::Numeric(Some(10), Some(0))),
-            (FieldName::try_from("SEX").unwrap(), FieldType::Character(Some(10))),
-            (FieldName::try_from("CONTACT").unwrap(), FieldType::Character(Some(50))),
-            (FieldName::try_from("PRODUCTNAM").unwrap(), FieldType::Character(Some(100))),
-            (FieldName::try_from("PRODUCTCOU").unwrap(), FieldType::Numeric(Some(10), Some(0))),
-            (FieldName::try_from("PRICE").unwrap(), FieldType::Numeric(Some(18), Some(2))),
-            (FieldName::try_from("IPADDRESS").unwrap(), FieldType::Character(Some(50))),
-        ];
-
-        // Buat file output
-        let writer = match tokio::fs::File::create(&file_path) {
-            Ok(f) => f,
-            Err(e) => {
-                result.message = "Gagal membuat file DBF".into();
-                result.error = Some(e.to_string());
-                return result;
-            }
-        };
-
-        let mut table_writer = TableWriterBuilder::from_writer(writer)
-            .add_fields(fields.clone())
-            .build()
-            .unwrap();
-
-        for row in rows {
-            let record = Record::new()
-                .insert("EMAIL", FieldValue::Character(Some(row.get::<_, String>(0).unwrap_or_default())))
-                .insert("FULLNAME", FieldValue::Character(Some(row.get::<_, String>(1).unwrap_or_default())))
-                .insert("AGE", FieldValue::Numeric(Some(row.get::<_, i32>(2).unwrap_or(0) as f64)))
-                .insert("SEX", FieldValue::Character(Some(row.get::<_, String>(3).unwrap_or_default())))
-                .insert("CONTACT", FieldValue::Character(Some(row.get::<_, String>(4).unwrap_or_default())))
-                .insert("PRODUCTNAM", FieldValue::Character(Some(row.get::<_, String>(5).unwrap_or_default())))
-                .insert("PRODUCTCOU", FieldValue::Numeric(Some(row.get::<_, i32>(6).unwrap_or(0) as f64)))
-                .insert("PRICE", FieldValue::Numeric(Some(row.get::<_, f64>(7).unwrap_or(0.0))))
-                .insert("IPADDRESS", FieldValue::Character(Some(row.get::<_, String>(8).unwrap_or_default())));
-
-            if let Err(e) = table_writer.write_record(&record) {
-                result.message = "Gagal menulis record ke DBF".into();
-                result.error = Some(format!("DBF write error: {}", e));
+        // 3. Pastikan direktori ada
+        let path = output_path.as_ref();
+        if let Some(dir) = path.parent() {
+            if let Err(e) = tokio::fs::create_dir_all(dir).await {
+                result.message = "Failed to create dir".into();
+                result.error   = Some(e.to_string());
                 return result;
             }
         }
 
+        // 4. Buat file
+        let mut file = match tokio::fs::File::create(path).await {
+            Ok(f) => f,
+            Err(e) => {
+                result.message = "Failed to create file".into();
+                result.error   = Some(e.to_string());
+                return result;
+            }
+        };
+
+        // 5. Tulis header XML
+        if let Err(e) = file.write_all(b"<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n<Records>\n").await {
+            result.message = "Failed to write XML header".into();
+            result.error   = Some(e.to_string());
+            return result;
+        }
+
+        // 6. Iterasi baris dan tulis setiap record sebagai elemen <Record>
+        let mut rows = stream;
+        while let Some(row_res) = rows.next().await {
+            match row_res {
+                Ok(row) => {
+                    // ambil setiap kolom
+                    let email        : &str               = row.get("Email").unwrap_or("");
+                    let full_name    : &str               = row.get("FullName").unwrap_or("");
+                    let age          : i32                = row.get("Age").unwrap_or(0);
+                    let sex          : &str               = row.get("Sex").unwrap_or("");
+                    let contact      : &str               = row.get("Contact").unwrap_or("");
+                    let product_name : &str               = row.get("ProductName").unwrap_or("");
+                    let product_count: i32                = row.get("ProductCount").unwrap_or(0);
+                    let price: f64 = match row.try_get::<Numeric, _>("Price") {
+                        Ok(Some(n)) => DataService::numeric_to_f64(&n).unwrap_or(0.0),
+                        _ => 0.0,
+                    };
+                    let ip_address   : &str               = row.get("IPAddress").unwrap_or("");
+                    // bangun XML untuk satu record
+                    let xml = format!(
+                        "  <Record>\n\
+                        \t<Email>{}</Email>\n\
+                        \t<FullName>{}</FullName>\n\
+                        \t<Age>{}</Age>\n\
+                        \t<Sex>{}</Sex>\n\
+                        \t<Contact>{}</Contact>\n\
+                        \t<ProductName>{}</ProductName>\n\
+                        \t<ProductCount>{}</ProductCount>\n\
+                        \t<Price>{:.2}</Price>\n\
+                        \t<IPAddress>{}</IPAddress>\n\
+                        </Record>\n",
+                        Self::xml_escape(email),
+                        Self::xml_escape(full_name),
+                        age,
+                        Self::xml_escape(sex),
+                        Self::xml_escape(contact),
+                        Self::xml_escape(product_name),
+                        product_count,
+                        price,
+                        Self::xml_escape(ip_address),
+                    );
+
+                    if let Err(e) = file.write_all(xml.as_bytes()).await {
+                        result.message = "Failed to write record".into();
+                        result.error   = Some(e.to_string());
+                        return result;
+                    }
+                }
+                Err(e) => {
+                    result.message = "Error fetching row".into();
+                    result.error   = Some(e.to_string());
+                    return result;
+                }
+            }
+        }
+
+        // 7. Tulis footer & selesai
+        if let Err(e) = file.write_all(b"</Records>") .await {
+            result.message = "Failed to write XML footer".into();
+            result.error   = Some(e.to_string());
+            return result;
+        }
+
         result.result = true;
-        result.message = "Export DBF berhasil".into();
+        result.message = "Export XML successful".into();
+        result.data    = Some(path.to_string_lossy().to_string());
+        result
+    }
+
+    pub async fn export_to_pdf_file<P: AsRef<Path>>(
+        pool: web::Data<Pool<ConnectionManager>>,
+        output_path: P,
+    ) -> ActionResult<String, String> {
+        let mut result = ActionResult::default();
+
+        // 1️⃣ Ambil koneksi DB
+        let mut conn = match pool.get().await {
+            Ok(c) => c,
+            Err(e) => {
+                result.message = "Failed to get DB connection".into();
+                result.error = Some(e.to_string());
+                return result;
+            }
+        };
+
+        // 2️⃣ Query data
+        let query = r#"
+            SELECT Email, FullName, Age, Sex, Contact,
+                ProductName, ProductCount, Price, IPAddress, LastUpdate
+            FROM TempImport
+        "#;
+        let mut stream = match conn.query(query, &[]).await {
+            Ok(r) => r.into_row_stream(),
+            Err(e) => {
+                result.message = "Query failed".into();
+                result.error = Some(e.to_string());
+                return result;
+            }
+        };
+
+        // 3️⃣ Kumpulkan data ke Vec<ReportRow>
+        let mut rows = Vec::new();
+        while let Some(row_res) = stream.next().await {
+            match row_res {
+                Ok(row) => {
+                    // Mapping kolom ke struct
+                    let email: String = row.get("Email").unwrap_or("").to_string();
+                    let full_name: String = row.get("FullName").unwrap_or("").to_string();
+                    let age: i32 = row.get("Age").unwrap_or(0);
+                    let sex: String = row.get("Sex").unwrap_or("").to_string();
+                    let contact: String = row.get("Contact").unwrap_or("").to_string();
+                    let product_name: String = row.get("ProductName").unwrap_or("").to_string();
+                    let product_count: i32 = row.get("ProductCount").unwrap_or(0);
+                    let price: f64 = match row.try_get::<Numeric, _>("Price") {
+                        Ok(Some(n)) => DataService::numeric_to_f64(&n).unwrap_or(0.0),
+                        _ => 0.0,
+                    };
+                    let ip_address: String = row.get("IPAddress").unwrap_or("").to_string();
+                    let last_update: String = row
+                        .get::<chrono::NaiveDateTime, _>("LastUpdate")
+                        .map(|dt| dt.to_string())
+                        .unwrap_or_default();
+
+                    rows.push(ReportRow {
+                        email,
+                        full_name,
+                        age,
+                        sex,
+                        contact,
+                        product_name,
+                        product_count,
+                        price,
+                        ip_address,
+                        last_update,
+                    });
+                }
+                Err(e) => {
+                    result.message = "Error reading row".into();
+                    result.error = Some(e.to_string());
+                    return result;
+                }
+            }
+        }
+
+        // 4️⃣ Render HTML pake Sailfish
+        let tpl = ReportTemplate { rows: &rows };
+        let html = match tpl.render_once() {
+            Ok(h) => h,
+            Err(e) => {
+                result.message = "Failed to render template".into();
+                result.error = Some(e.to_string());
+                return result;
+            }
+        };
+
+        // 5️⃣ Simpan HTML sementara ke file
+        let tmp_html_path = format!("templates/exports/{}.html", chrono::Utc::now().timestamp_millis());
+        if let Err(e) = tokio::fs::write(&tmp_html_path, html).await {
+            result.message = "Failed to write temporary HTML file".into();
+            result.error = Some(e.to_string());
+            return result;
+        }
+
+        // 6️⃣ Jalankan wkhtmltopdf di blocking thread agar gak blocking async runtime
+        let output_path = output_path.as_ref().to_owned();
+        let output_path_owned = output_path.to_owned();
+        let tmp_html_clone = tmp_html_path.clone();
+        let wk_res = tokio::task::spawn_blocking(move || {
+            Command::new("wkhtmltopdf")
+                .arg(&tmp_html_clone)
+                .arg(output_path.clone())
+                .status()
+        })
+        .await;
+
+    println!("wk_res: {:#?}", wk_res);
+
+        // Handle hasil eksekusi
+        match wk_res {
+            Ok(Ok(status)) if status.success() => {
+                // Berhasil generate PDF
+                // Hapus file HTML sementara
+                let _ = tokio::fs::remove_file(&tmp_html_path);
+
+                result.result = true;
+                result.message = "PDF exported successfully".into();
+                result.data = Some(output_path_owned.to_string_lossy().into());
+                result
+            }
+            Ok(Ok(status)) => {
+                result.message = "wkhtmltopdf exited with error".into();
+                result.error = Some(format!("Exit code: {:?}", status.code()));
+                result
+            }
+            Ok(Err(e)) => {
+                result.message = "Failed to run wkhtmltopdf".into();
+                result.error = Some(e.to_string());
+                result
+            }
+            Err(e) => {
+                result.message = "Failed to spawn blocking task".into();
+                result.error = Some(e.to_string());
+                result
+            }
+        }
+    }
+
+    pub async fn export_to_dbf_file<P: AsRef<Path>>(connection: web::Data<bb8::Pool<ConnectionManager>>,output_path: P) -> ActionResult<String, String> {
+        let mut result = ActionResult::default();
+
+        let path = output_path.as_ref();
+        if let Some(dir) = path.parent() {
+            if let Err(e) = tokio::fs::create_dir_all(dir).await {
+                result.message = "Failed to create dir".into();
+                result.error = Some(e.to_string());
+                return result;
+            }
+        }
+
+        // Ambil koneksi DB
+        let mut conn = match connection.get().await {
+            Ok(c) => c,
+            Err(e) => {
+                result.message = "Failed to get DB connection".into();
+                result.error = Some(e.to_string());
+                return result;
+            }
+        };
+
+        // Query data
+        let query = r#"
+            SELECT 
+                Email, FullName, Age, Sex, Contact,
+                ProductName, ProductCount, Price, IPAddress
+            FROM TempImport
+        "#;
+
+        let rows_result = conn.query(query, &[]).await;
+        let mut stream = match rows_result {
+            Ok(r) => r.into_row_stream(),
+            Err(e) => {
+                result.message = "Failed to query".into();
+                result.error = Some(e.to_string());
+                return result;
+            }
+        };
+
+        result.result = true;
+        result.data = Some(path.to_string_lossy().to_string());
+
         result
     }
 
@@ -429,6 +666,15 @@ impl ExportService {
             col_index = (col_index - 1) / 26;
         }
         col_letter
+    }
+
+    // helper sederhana untuk escape teks ke XML
+    fn xml_escape(s: &str) -> String {
+        s.replace("&", "&amp;")
+        .replace("<", "&lt;")
+        .replace(">", "&gt;")
+        .replace("\"", "&quot;")
+        .replace("'", "&apos;")
     }
 
 }
