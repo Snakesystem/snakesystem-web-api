@@ -37,7 +37,11 @@ async fn get_table_data(params: web::Query<TableDataParams>, pool: web::Data<Poo
 
     match data {
         Ok(response) => {
-            return HttpResponse::Ok().json(response);
+            return HttpResponse::Ok().json(serde_json::json!({
+                "total": response.total,
+                "totalNotFiltered": response.total_not_filtered,
+                "rows": response.rows
+            }));
         },
         Err(e) => {
             return HttpResponse::InternalServerError().json(

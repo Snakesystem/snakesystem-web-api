@@ -539,6 +539,7 @@ impl AuthService {
                                     }
                                 } else {
                                     // 🔵 Insert baru
+                                    print!("🔵 Insert baru");
                                     let _ = conn.execute(
                                         "INSERT INTO WEB_Cookies (AuthUserNID, Cookies, AppComputerName, AppIPAddress, LastUpdate) VALUES (@P1, @P2, @P3, @P4, GETDATE())",
                                         &[&session.auth_usernid, &token, &session.comp_name, &session.ip_address],

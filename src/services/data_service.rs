@@ -158,7 +158,7 @@ impl DataService {
 
     pub async fn get_table_data(allparams: TableDataParams, connection: web::Data<Pool<ConnectionManager>>) -> Result<ResultList, Box<dyn std::error::Error>> {
         let mut result = ResultList {
-            totalNotFiltered: 0,
+            total_not_filtered: 0,
             total: 0,
             rows: vec![],
         };
@@ -170,7 +170,7 @@ impl DataService {
         if !allparams.tablename.is_empty() {
             let row: Option<Row> = client.query(query.query_total_all.clone(), &[]).await?.into_row().await?;
             if let Some(r) = row {
-                result.totalNotFiltered = r.try_get::<i32, _>(0)?.unwrap_or(0);
+                result.total_not_filtered = r.try_get::<i32, _>(0)?.unwrap_or(0);
             }
         }
     
@@ -183,7 +183,7 @@ impl DataService {
                 }
             }
         } else {
-            result.total = result.totalNotFiltered;
+            result.total = result.total_not_filtered;
         }
     
         let rows = client.query(query.query.clone(), &[]).await?.into_results().await?;

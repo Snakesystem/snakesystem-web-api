@@ -1,24 +1,24 @@
-use std::{io::BufWriter, path::Path, process::Command};
+use std::{path::Path, process::Command};
 use actix_web::web;
 use bb8::{Pool, PooledConnection};
 use bb8_tiberius::ConnectionManager;
 // use dbase::{FieldIOError, FieldName, FieldType, FieldValue, FieldWriter, Record, TableWriterBuilder, WritableRecord};
 use futures::StreamExt;
 // use printpdf::{BuiltinFont, Mm, PdfDocument};
-use sailfish::TemplateOnce;
-use tiberius::{numeric::Numeric, Uuid};
+// use sailfish::TemplateOnce;
+use tiberius::{numeric::Numeric};
 use tokio::io::AsyncWriteExt;
 use umya_spreadsheet::*;
-use crate::contexts::model::{ActionResult, PdfTemplate, ReportRow};
+use crate::contexts::model::{ActionResult, ReportRow};
 
 use super::data_service::DataService;
 
 
-#[derive(TemplateOnce)]
-#[template(path = "../templates/order-data.stpl")]  // Template sailfish di folder templates/report.stpl
-struct ReportTemplate<'a> {
-    rows: &'a [ReportRow],
-}
+// #[derive(TemplateOnce)]
+// #[template(path = "../templates/order-data.stpl")]  // Template sailfish di folder templates/report.stpl
+// struct ReportTemplate<'a> {
+//     rows: &'a [ReportRow],
+// }
 
 pub struct ExportService;
 
@@ -549,16 +549,16 @@ impl ExportService {
         }
 
         // 4️⃣ Render HTML pake Sailfish
-        let tpl = ReportTemplate { rows: &rows };
-        let html = match tpl.render_once() {
-            Ok(h) => h,
-            Err(e) => {
-                result.message = "Failed to render template".into();
-                result.error = Some(e.to_string());
-                return result;
-            }
-        };
-
+        // let tpl = ReportTemplate { rows: &rows };
+        // let html = match tpl.render_once() {
+        //     Ok(h) => h,
+        //     Err(e) => {
+        //         result.message = "Failed to render template".into();
+        //         result.error = Some(e.to_string());
+        //         return result;
+        //     }
+        // };
+        let html = "Hello world!";
         // 5️⃣ Simpan HTML sementara ke file
         let tmp_html_path = format!("templates/exports/{}.html", chrono::Utc::now().timestamp_millis());
         if let Err(e) = tokio::fs::write(&tmp_html_path, html).await {

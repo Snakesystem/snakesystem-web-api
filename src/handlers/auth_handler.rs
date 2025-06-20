@@ -27,7 +27,7 @@ async fn login(req: HttpRequest, connection: web::Data<Pool<ConnectionManager>>,
 
     let mut result: ActionResult<Claims, _> = AuthService::login(connection.clone(), request.into_inner(), req.clone(), APP_NAME).await;
 
-    let token_cookie = req.cookie("snakesystem").map(|c| c.value().to_string()).unwrap_or_default();
+    // let token_cookie = req.cookie("snakesystem").map(|c| c.value().to_string()).unwrap_or_default();
 
     match result {
         response if response.error.is_some() => {
@@ -39,14 +39,14 @@ async fn login(req: HttpRequest, connection: web::Data<Pool<ConnectionManager>>,
                 match create_jwt(user.clone()) {
                     Ok(token) => {
                         // ✅ Simpan token dalam cookie
-                        result = AuthService::check_session(connection, user.clone(), token.clone(), token_cookie.clone(), false, false, false).await;
+                        result = AuthService::check_session(connection, user.clone(), token.clone(), "".to_string(), false, false, false).await;
 
                         // ✅ Jika berhasil, kembalikan JSON response
                         if !result.result {
                             return HttpResponse::InternalServerError().json(result);
                         }
                             
-                        let cookie = Cookie::build("snakesystem", token_cookie.is_empty().then(|| token.clone()).unwrap_or(token_cookie.clone()))
+                        let cookie = Cookie::build("snakesystem", token)
                             .path("/")
                             .http_only(true)
                             .same_site(SameSite::None) // ❗ WAJIB None agar cookie cross-site

@@ -1,5 +1,4 @@
 use chrono::{DateTime, Utc};
-use sailfish::TemplateOnce;
 use serde::{Deserialize, Serialize};
 use utoipa::{IntoParams, ToSchema};
 use validator::Validate;
@@ -178,14 +177,14 @@ pub struct QueryClass {
 
 #[derive(Debug, Serialize, ToSchema)]
 pub struct ResultList {
-    pub totalNotFiltered: i32,
+    pub total_not_filtered: i32,
     pub total: i32,
     pub rows: Vec<serde_json::Value>, // Pastikan ini bisa dikonversi ke JSON
 }
 
 #[derive(Debug, Deserialize)]
 pub struct MyRow {
-    pub id: i32,
+    // pub id: i32,
     pub name: String,
     // tambah field lain sesuai kebutuhan
 }
@@ -204,8 +203,8 @@ pub struct ReportRow {
     pub last_update: String,
 }
 
-#[derive(TemplateOnce, Debug, Serialize)]
-#[template(path = "order-data.stpl")]
-pub struct PdfTemplate {
-    pub rows: Vec<ReportRow>,
-}
+// #[derive(TemplateOnce, Debug, Serialize)]
+// #[template(path = "order-data.stpl")]
+// pub struct PdfTemplate {
+//     pub rows: Vec<ReportRow>,
+// }
